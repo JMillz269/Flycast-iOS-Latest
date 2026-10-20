@@ -9,7 +9,7 @@
 <br>
 ### iOS
 
-This fork only supports iOS. This fork is maintained by myself and myself only. This project was forked from the original Flycast repository and updated for iOS . This should support from iOS 9 - iOS 27. DO NOT POST BUG REPORTS/ISSUES/ETC FOR THIS FORK TO THE ORIGINAL FLYCAST DEVELOPER. EVER. THIS FORK IS NOT SUPPORTED BY THEM. 
+This fork only supports iOS. This fork is maintained by myself and myself only. This project was forked from the original Flycast repository and updated for iOS . This should support from iOS 9 - iOS 27. DO NOT POST BUG REPORTS/ISSUES/REQUESTS/ETC FOR THIS FORK TO THE ORIGINAL FLYCAST DEVELOPER. EVER. THIS FORK IS NOT SUPPORTED BY THEM. THEY DO NOT SUPPORT iOS.
 <br>
 <br>
 <br>

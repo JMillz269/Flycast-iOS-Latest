@@ -1,107 +1,47 @@
 # Flycast
 
-[![Android CI](https://github.com/flyinghead/flycast/actions/workflows/android.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/android.yml)
-[![C/C++ CI](https://github.com/flyinghead/flycast/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/c-cpp.yml)
-[![Nintendo Switch CI](https://github.com/flyinghead/flycast/actions/workflows/switch.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/switch.yml)
-[![Windows UWP CI](https://github.com/flyinghead/flycast/actions/workflows/uwp.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/uwp.yml)
-[![BSD CI](https://github.com/flyinghead/flycast/actions/workflows/bsd.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/bsd.yml)
+[![iOS Release IPA](https://github.com/JMillz269/Flycast-iOS-Latest/actions/workflows/build-ios.yml/badge.svg)](https://github.com/JMillz269/Flycast-iOS-Latest/actions/workflows/build-ios.yml)
 
 <img src="shell/linux/flycast.png" alt="flycast logo" width="150"/>
 
 **Flycast** is a multi-platform Sega Dreamcast, Naomi, Naomi 2, and Atomiswave emulator derived from [**reicast**](https://github.com/skmp/reicast-emulator).
-
-Information about configuration and supported features can be found on [**TheArcadeStriker's flycast wiki**](https://github.com/TheArcadeStriker/flycast-wiki/wiki).
-
-Join us on our [**Discord server**](https://discord.gg/X8YWP8w) for a chat.
-
-## Downloads ![android](https://flyinghead.github.io/flycast-builds/android.jpg) ![windows](https://flyinghead.github.io/flycast-builds/windows.png) ![linux](https://flyinghead.github.io/flycast-builds/ubuntu.png) ![apple](https://flyinghead.github.io/flycast-builds/apple.png) ![switch](https://flyinghead.github.io/flycast-builds/switch.png) ![xbox](https://flyinghead.github.io/flycast-builds/xbox.png)
-
-Get builds for your system from the [**builds page**](https://flyinghead.github.io/flycast-builds/) or [**GitHub Releases**](https://github.com/flyinghead/flycast/releases).
-
-- **Latest master builds:** regular builds from the `master` branch with recent fixes and updates.
-- **Nightly dev builds:** experimental builds with the latest features and changes.
-- **Stable tagged releases:** versioned release builds published on GitHub Releases.
-
-Automated test results are available from the builds page as well.
-
-## Install
-
-### Android ![android](https://flyinghead.github.io/flycast-builds/android.jpg)
-
-&emsp;Install Flycast from [**Google Play**](https://play.google.com/store/apps/details?id=com.flycast.emulator).
-
-### Flatpak (Linux ![ubuntu logo](https://flyinghead.github.io/flycast-builds/ubuntu.png))
-
-1. [Set up Flatpak](https://www.flatpak.org/setup/).
-
-2. Install Flycast from [Flathub](https://flathub.org/apps/details/org.flycast.Flycast):
-
-&emsp;`flatpak install -y org.flycast.Flycast`
-
-3. Run Flycast:
-
-&emsp;`flatpak run org.flycast.Flycast`
-
-### Homebrew (macOS ![apple logo](https://flyinghead.github.io/flycast-builds/apple.png))
-
-1. [Set up Homebrew](https://brew.sh) or run `brew update` if already installed.
-
-2. Choose one channel:
-
-| Channel              | Install command                                         |
-| -------------------- | ------------------------------------------------------- |
-| Master (recommended) | `brew install --cask flyinghead/flycast/flycast@master` |
-| Stable               | `brew install --cask flyinghead/flycast/flycast`        |
-| Nightly dev          | `brew install --cask flyinghead/flycast/flycast@dev`    |
-
-3. Run Flycast from your Application folder
-
-&emsp;See the <a href="https://github.com/flyinghead/homebrew-flycast#readme">Flycast tap</a> for updating, uninstalling, and switching channels.
-
+<br>
+<br>
 ### iOS
 
-&emsp;Due to persistent harassment from an iOS user, support for this platform has been dropped.
+This fork only supports iOS. This fork is maintained by myself and myself only. This project was forked from the original Flycast repository and updated for iOS . This should support from iOS 9 - iOS 27. DO NOT POST BUG REPORTS/ISSUES/ETC FOR THIS FORK TO THE ORIGINAL FLYCAST DEVELOPER. EVER. THIS FORK IS NOT SUPPORTED BY THEM. 
+<br>
+<br>
+<br>
+ROM files go in Files, Documents, ROMS <br>
+BIOS files go in Files, Documents, BIOS
+<br>
+<br>
+<ul><li>Supports LiveContainer and direct install environments</li>
+<li>On-screen controller will automatically hide when an MFI controller is used</li>
+<li>Supports Universal.js for JIT using StikDebug/StosDebug for TXM capable iOS/iPadOS devices</li>
+<li>non-TXM devices should be able to activate JIT as they normally would</li>
+<li>Retroarch Achievement support (Retroarch Achievements will display on-screen underneath the on-screen controller overlay)</li>
+<li>App allocates 64MB for JIT so it always falls within an allowed address range. App core should only use ~16MB anyway. We don't need much.</li>
+<li>Fixed OpenMP iOS support. Can max out resolution settings on my iPhone 16 Pro Max at full speed</li>
+<li>Retains all support for Dreamcast, Naomi, Naomi 2, and Atomiswave</ul></li>
+<br>
+<br>
+<br>
+<img width="2868" height="1320" alt="Image (1)" src="https://github.com/user-attachments/assets/e79cbe39-98f6-4c4c-88b4-e12e47d58e52" />
+<br>
+<br>
+<img width="2868" height="1320" alt="Image" src="https://github.com/user-attachments/assets/e434d1bf-ccfc-4a37-8401-3497e5024f21" />
 
-### Xbox One/Series ![xbox logo](https://flyinghead.github.io/flycast-builds/xbox.png)
 
-&emsp;Grab the latest build from [**the builds page**](https://flyinghead.github.io/flycast-builds/), or the [**GitHub Actions**](https://github.com/flyinghead/flycast/actions/workflows/uwp.yml). Then install it using the **Xbox Device Portal**.
 
-## Build from source
-
-### macOS
-
-&emsp;Right-click the bootstrap script and choose **Open**:
-
-&emsp;`shell/apple/generate_xcode_project.command`
-
-### Windows
-
-&emsp;Double-click the bootstrap script:
-
-&emsp;`shell\windows\generate_vs_project.bat`
-
-### Linux
-
-#### Dependencies
-
-- **C/C++ compiler toolchain** (e.g. `gcc`/`g++`)
-- **CMake**
-- **make**
-- **libcurl** (development headers)
-- **libudev** (development headers)
-- **SDL2** (development headers)
-- **Graphics API**: Vulkan, OpenGL
 
 #### Build
 
 ```
-$ git clone --recursive https://github.com/flyinghead/flycast.git
-$ cd flycast
+$ git clone --recursive https://github.com/JMillz269/Flycast-iOS-Latest.git
+$ cd Flycast-iOS-Latest
 $ mkdir build && cd build
 $ cmake ..
 $ make
 ```
-
-## Packaging status
-
-[![Packaging status](https://repology.org/badge/vertical-allrepos/flycast.svg)](https://repology.org/project/flycast/versions)

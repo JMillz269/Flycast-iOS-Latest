@@ -665,8 +665,16 @@ void flush()
 
 void init()
 {
-#ifdef FEAT_NO_RWX_PAGES
+#if defined(FEAT_NO_RWX_PAGES)
 	bool rc = virtmem::prepare_jit_block(ARM7_TCB, ICacheSize, (void**)&ICache, &rx_offset);
+#elif defined(TARGET_IPHONE)
+	bool rc;
+	rx_offset = 0;
+	if (virtmem::txm_jit_active())
+		// TXM: code is written through the RW alias and executed through the RX one
+		rc = virtmem::prepare_jit_block(ARM7_TCB, ICacheSize, (void**)&ICache, &rx_offset);
+	else
+		rc = virtmem::prepare_jit_block(ARM7_TCB, ICacheSize, (void**)&ICache);
 #else
 	bool rc = virtmem::prepare_jit_block(ARM7_TCB, ICacheSize, (void**)&ICache);
 #endif
@@ -677,9 +685,17 @@ void init()
 
 void term()
 {
-#ifdef FEAT_NO_RWX_PAGES
+#if defined(FEAT_NO_RWX_PAGES)
 	if (ICache != nullptr)
 		virtmem::release_jit_block(ARM7_TCB, ICache, ICacheSize);
+#elif defined(TARGET_IPHONE)
+	if (ICache != nullptr)
+	{
+		if (virtmem::txm_jit_active())
+			virtmem::release_jit_block(ARM7_TCB, ICache, ICacheSize);
+		else if (ICache != ARM7_TCB)
+			virtmem::release_jit_block(ICache, ICacheSize);
+	}
 #else
 	if (ICache != nullptr && ICache != ARM7_TCB)
 		virtmem::release_jit_block(ICache, ICacheSize);

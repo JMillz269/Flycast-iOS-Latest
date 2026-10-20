@@ -78,10 +78,14 @@ static DynaCode *writeStoreQueue64;
 static void jitWriteProtect(Sh4CodeBuffer &codeBuffer, bool enable)
 {
 #ifdef TARGET_IPHONE
-    if (enable)
-    	virtmem::region_set_exec(codeBuffer.getBase(), codeBuffer.getSize());
-    else
-    	virtmem::region_unlock(codeBuffer.getBase(), codeBuffer.getSize());
+    // TXM pool: RX and RW are separate mappings, nothing to toggle
+    if (!virtmem::txm_jit_active())
+    {
+        if (enable)
+            virtmem::region_set_exec(codeBuffer.getBase(), codeBuffer.getSize());
+        else
+            virtmem::region_unlock(codeBuffer.getBase(), codeBuffer.getSize());
+    }
 #else
     JITWriteProtect(enable);
 #endif

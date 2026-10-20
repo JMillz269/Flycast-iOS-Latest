@@ -450,6 +450,22 @@ if(USE_OPENMP)
 			target_link_libraries(${PROJECT_NAME} PRIVATE OpenMP::OpenMP_CXX)
 		endif()
 	endif()
+	if(IOS)
+		message("-- Finding OpenMP.xcframework for iOS")
+		set(OPENMP_XCFRAMEWORK "${CMAKE_CURRENT_SOURCE_DIR}/shell/apple/emulator-ios/OpenMP/OpenMP.xcframework")
+		if(IS_DIRECTORY ${OPENMP_XCFRAMEWORK})
+			# CMake does not support linking xcframework directly atm. (see https://gitlab.kitware.com/cmake/cmake/-/issues/21752)
+			set(OPENMP_FRAMEWORK ${OPENMP_XCFRAMEWORK}/ios-arm64_arm64e/OpenMP.framework/Versions/A/libomp.a)
+			if(EXISTS ${OPENMP_FRAMEWORK})
+				message("-- Found OpenMP.xcframework: ${OPENMP_FRAMEWORK} (Linking static library before CMake support linking xcframework)")
+				target_link_libraries(${PROJECT_NAME} PRIVATE ${OPENMP_FRAMEWORK})
+				target_include_directories(${PROJECT_NAME} PRIVATE ${OPENMP_XCFRAMEWORK}/ios-arm64_arm64e/OpenMP.framework/Versions/A/Headers)
+				target_compile_options(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Xclang -fopenmp>)
+			endif()
+		else()
+			message("-- Could NOT find OpenMP.xcframework, compile it using shell/apple/emulator-ios/OpenMP/build_ios_openmp.sh")
+		endif()
+	endif()
 endif()
 
 option(BUILD_SHARED_LIBS "Build shared library" OFF)
@@ -1285,6 +1301,16 @@ if(NOT LIBRETRO)
 			set_property(TARGET ${PROJECT_NAME} PROPERTY XCODE_ATTRIBUTE_SWIFT_VERSION "5.0")
 			add_subdirectory(shell/apple/emulator-ios/AltKit)
 			target_link_libraries(${PROJECT_NAME} PRIVATE AltKit)
+
+			# TXM JIT support (iOS 26+): dual-mapped JIT pool managed with lwmem
+			target_sources(${PROJECT_NAME} PRIVATE
+					ios_jit_manager.h
+					ios_jit_manager.m
+					lwmem.c
+					lwmem_sys_apple.c)
+			target_include_directories(${PROJECT_NAME} PRIVATE
+					${CMAKE_CURRENT_SOURCE_DIR}
+					${CMAKE_CURRENT_SOURCE_DIR}/lwmem)
 
 			target_sources(${PROJECT_NAME} PRIVATE
 					shell/apple/common/http_client.mm

@@ -46,6 +46,8 @@ static Arm64UnwindInfo unwinder;
 #ifdef TARGET_IPHONE
 static void JITWriteProtect(bool enable)
 {
+    if (virtmem::txm_jit_active())
+        return;     // TXM pool: RX and RW are separate mappings, nothing to toggle
     if (enable)
     	virtmem::region_set_exec(recompiler::ICache, recompiler::ICacheSize);
     else

@@ -51,6 +51,9 @@
 		[alert addAction:defaultAction];
 	}
 	[parentView addSubview:self.view];
+	self.view.frame = parentView.bounds;
+	self.view.userInteractionEnabled = YES;
+	self.view.multipleTouchEnabled = YES;
 }
 
 - (void)hideController

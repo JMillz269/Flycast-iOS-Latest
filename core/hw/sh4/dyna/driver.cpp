@@ -353,8 +353,16 @@ void Sh4Recompiler::Init()
 
 	// Call the platform-specific magic to make the pages RWX
 	CodeCache = nullptr;
-#ifdef FEAT_NO_RWX_PAGES
+	cc_rx_offset = 0;
+#if defined(FEAT_NO_RWX_PAGES)
 	bool rc = virtmem::prepare_jit_block(SH4_TCB, FULL_SIZE, (void**)&CodeCache, &cc_rx_offset);
+#elif defined(TARGET_IPHONE)
+	bool rc;
+	if (virtmem::txm_jit_active())
+		// TXM: code is written through the RW alias and executed through the RX one
+		rc = virtmem::prepare_jit_block(SH4_TCB, FULL_SIZE, (void**)&CodeCache, &cc_rx_offset);
+	else
+		rc = virtmem::prepare_jit_block(SH4_TCB, FULL_SIZE, (void**)&CodeCache);
 #else
 	bool rc = virtmem::prepare_jit_block(SH4_TCB, FULL_SIZE, (void**)&CodeCache);
 #endif
@@ -370,9 +378,17 @@ void Sh4Recompiler::Init()
 void Sh4Recompiler::Term()
 {
 	INFO_LOG(DYNAREC, "Sh4Recompiler::Term");
-#ifdef FEAT_NO_RWX_PAGES
+#if defined(FEAT_NO_RWX_PAGES)
 	if (CodeCache != nullptr)
 		virtmem::release_jit_block(CodeCache, (u8 *)CodeCache + cc_rx_offset, FULL_SIZE);
+#elif defined(TARGET_IPHONE)
+	if (CodeCache != nullptr)
+	{
+		if (virtmem::txm_jit_active())
+			virtmem::release_jit_block(CodeCache, (u8 *)CodeCache + cc_rx_offset, FULL_SIZE);
+		else if (CodeCache != SH4_TCB)
+			virtmem::release_jit_block(CodeCache, FULL_SIZE);
+	}
 #else
 	if (CodeCache != nullptr && CodeCache != SH4_TCB)
 		virtmem::release_jit_block(CodeCache, FULL_SIZE);

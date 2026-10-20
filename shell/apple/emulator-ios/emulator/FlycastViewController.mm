@@ -200,6 +200,13 @@ static void updateAudioSession(Event event, void *)
 	set_user_config_dir(homedir);
 	set_user_data_dir(homedir);
 
+	const std::string biosDir = homedir + "BIOS/";
+	const std::string romsDir = homedir + "ROMS/";
+	const std::string vmuDir = homedir + "VMU/";
+	for (const std::string& dir : { biosDir, romsDir, vmuDir })
+		[[NSFileManager defaultManager] createDirectoryAtPath:[NSString stringWithUTF8String:dir.c_str()] withIntermediateDirectories:YES attributes:nil error:nil];
+	add_system_data_dir(biosDir);
+
 #ifdef DEBUG
 	int ret = task_set_exception_ports(
 									   mach_task_self(),
@@ -217,7 +224,7 @@ static void updateAudioSession(Event event, void *)
 
 	flycast_init(0, nullptr);
 	config::ContentPath.get().clear();
-	config::ContentPath.get().push_back(homedir);
+	config::ContentPath.get().push_back(romsDir);
 
 #if !TARGET_OS_TV
 	self.padController = [[PadViewController alloc] initWithNibName:@"PadViewController" bundle:nil];

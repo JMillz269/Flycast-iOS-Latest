@@ -15,6 +15,7 @@
 #include "hw/mem/addrspace.h"
 #include "hw/sh4/sh4_if.h"
 #include "oslib/virtmem.h"
+#include "log/Log.h"
 
 #ifndef MAP_NOSYNC
 #define MAP_NOSYNC 0
@@ -245,9 +246,196 @@ void create_mappings(const Mapping *vmem_maps, unsigned nummaps) {
 	}
 }
 
+} // namespace virtmem
+
+#ifdef TARGET_IPHONE
+#include "ios_jit_manager.h"
+#include <mach/mach.h>
+
+extern "C" {
+#include "lwmem.h"
+}
+
+// Flycast needs about 15 MB of JIT memory in total (SH4 ~11 MB, ARM7 4 MB, DSP 32 KB)
+constexpr size_t TXM_EXECUTABLE_REGION_SIZE = 64 * 1024 * 1024;
+
+#endif
+
+namespace virtmem {
+
+// Define TXM pool info inside virtmem namespace so it can be accessed as virtmem::g_txm_pool
+struct TXMPoolInfo {
+    u8* rx_region = nullptr;
+    u8* rw_region = nullptr;
+    ptrdiff_t rw_rx_diff = 0;
+    bool initialized = false;
+    bool uses_txm = false;
+};
+
+TXMPoolInfo g_txm_pool;  // Now in virtmem namespace
+
+#ifdef TARGET_IPHONE
+static bool init_txm_jit_pool();
+
+// True when JIT code lives in the TXM dual-mapped pool. Initialises the pool on first use.
+bool txm_jit_active() {
+    return init_txm_jit_pool();
+}
+
+static bool init_txm_jit_pool()
+{
+    if (g_txm_pool.initialized)
+        return g_txm_pool.uses_txm;
+
+    g_txm_pool.initialized = true;
+
+    bool has_txm = ios_device_has_txm();
+    bool is_debugged = ios_process_is_debugged();
+
+    NOTICE_LOG(VMEM, "=== iOS 26 JIT Detection ===");
+    NOTICE_LOG(VMEM, "Device has TXM: %s", has_txm ? "YES" : "NO");
+    NOTICE_LOG(VMEM, "Process debugged: %s", is_debugged ? "YES" : "NO");
+
+    if (!is_debugged) {
+        g_txm_pool.uses_txm = false;
+        return false;
+    }
+
+    NOTICE_LOG(VMEM, "TXM device WITH debugger - initializing TXM pool");
+
+    g_txm_pool.uses_txm = true;
+    const size_t size = TXM_EXECUTABLE_REGION_SIZE;
+
+    NOTICE_LOG(VMEM, "Initializing TXM JIT pool (%zu MB)...", size / (1024 * 1024));
+
+    u8* rx_ptr = static_cast<u8*>(mmap(nullptr, size, PROT_READ | PROT_EXEC,
+                                       MAP_ANON | MAP_PRIVATE, -1, 0));
+    if (rx_ptr == MAP_FAILED)
+    {
+        ERROR_LOG(VMEM, "TXM: Failed to allocate RX region: %s", strerror(errno));
+        g_txm_pool.uses_txm = false;
+        return false;
+    }
+    // The debugger's "prepare region" step only handles addresses below 2^36 (9 hex digits)
+    if ((uint64_t)rx_ptr + size > 0x1000000000ULL)
+        WARN_LOG(VMEM, "TXM: RX region %p is above 2^36, debugger can't prepare it", rx_ptr);
+
+    NOTICE_LOG(VMEM, "Registering with TXM via brk #0xf00d (universal.js)...");
+
+    if (has_txm) {
+        // universal.js protocol: x16 = command (1 = prepare JIT region),
+        // x0 = region address, x1 = length
+        __asm__ volatile (
+            "mov x0, %0\n"
+            "mov x1, %1\n"
+            "mov x16, #1\n"
+            "brk #0xf00d"
+            :: "r" (rx_ptr), "r" (size)
+            : "x0", "x1", "x16", "memory"
+        );
+    }
+
+    vm_address_t rw_region = 0;
+    vm_address_t target = reinterpret_cast<vm_address_t>(rx_ptr);
+    vm_prot_t cur_protection = 0;
+    vm_prot_t max_protection = 0;
+
+    kern_return_t retval = vm_remap(
+        mach_task_self(), &rw_region, size, 0,
+        VM_FLAGS_ANYWHERE, mach_task_self(), target, FALSE,
+        &cur_protection, &max_protection,
+        VM_INHERIT_DEFAULT
+    );
+
+    if (retval != KERN_SUCCESS)
+    {
+        ERROR_LOG(VMEM, "TXM: vm_remap failed with code 0x%x", retval);
+        munmap(rx_ptr, size);
+        g_txm_pool.uses_txm = false;
+        return false;
+    }
+
+    u8* rw_ptr = reinterpret_cast<u8*>(rw_region);
+
+    if (mprotect(rw_ptr, size, PROT_READ | PROT_WRITE) != 0)
+    {
+        ERROR_LOG(VMEM, "TXM: mprotect for RW region failed: %s", strerror(errno));
+        munmap(rx_ptr, size);
+        munmap(rw_ptr, size);
+        g_txm_pool.uses_txm = false;
+        return false;
+    }
+
+    lwmem_region_t regions[] = {
+        { (void*)rw_ptr, size },
+        { NULL, 0 }
+    };
+
+    size_t lwret = lwmem_assignmem(regions);
+    if (lwret == 0)
+    {
+        ERROR_LOG(VMEM, "TXM: lwmem_assignmem failed");
+        munmap(rx_ptr, size);
+        munmap(rw_ptr, size);
+        g_txm_pool.uses_txm = false;
+        return false;
+    }
+
+    g_txm_pool.rx_region = rx_ptr;
+    g_txm_pool.rw_region = rw_ptr;
+    g_txm_pool.rw_rx_diff = rw_ptr - rx_ptr;
+
+    NOTICE_LOG(VMEM, "TXM JIT pool initialized successfully");
+    NOTICE_LOG(VMEM, "  RX region: %p", rx_ptr);
+    NOTICE_LOG(VMEM, "  RW region: %p", rw_ptr);
+    NOTICE_LOG(VMEM, "  RW->RX offset: %td bytes", g_txm_pool.rw_rx_diff);
+
+    if (has_txm) {
+        // universal.js: x16 = 0 -> detach the debugger now that the region is prepared
+        __asm__ volatile ("mov x16, #0\n" "brk #0xf00d" ::: "x16", "memory");
+    }
+
+    return true;
+}
+#endif
+
 // Prepares the code region for JIT operations, thus marking it as RWX
 bool prepare_jit_block(void *code_area, size_t size, void **code_area_rwx)
 {
+#ifdef TARGET_IPHONE
+    // Try TXM mode first (iOS 26 with a JIT enabler such as StosDebug / StikDebug)
+    init_txm_jit_pool();
+
+    if (g_txm_pool.uses_txm)
+    {
+        const size_t pagesize = sysconf(_SC_PAGESIZE);
+
+        // Allocate from RW pool with alignment metadata
+        void* raw = lwmem_malloc(size + pagesize - 1 + sizeof(void*));
+        if (!raw)
+        {
+            ERROR_LOG(VMEM, "TXM: lwmem_malloc failed for size %zu", size);
+            ERROR_LOG(VMEM, "TXM: Pool exhausted");
+            return false;
+        }
+
+        // Align to page boundary
+        uintptr_t raw_addr = (uintptr_t)raw + sizeof(void*);
+        uintptr_t aligned = (raw_addr + pagesize - 1) & ~(pagesize - 1);
+
+        // Store raw pointer before aligned address for later free
+        ((void**)aligned)[-1] = raw;
+
+        // Return RX pointer (subtract diff to convert RW -> RX)
+        *code_area_rwx = (u8*)aligned - g_txm_pool.rw_rx_diff;
+
+        DEBUG_LOG(VMEM, "TXM alloc: RW=%p RX=%p size=%zu",
+                    (void*)aligned, *code_area_rwx, size);
+
+        return true;
+    }
+#endif
+
     // Try to map is as RWX, this fails apparently on OSX (and perhaps other systems?)
 	if (code_area != nullptr && region_set_exec(code_area, size))
     {
@@ -283,12 +471,52 @@ bool prepare_jit_block(void *code_area, size_t size, void **code_area_rwx)
 
 void release_jit_block(void *code_area, size_t size)
 {
+#ifdef TARGET_IPHONE
+	if (g_txm_pool.uses_txm)
+	{
+		// Convert RX pointer back to RW to access metadata
+		void* rw_ptr = (u8*)code_area + g_txm_pool.rw_rx_diff;
+		void* raw = ((void**)rw_ptr)[-1];
+		lwmem_free(raw);
+		return;
+	}
+#endif
 	munmap(code_area, size);
 }
 
 // Use two addr spaces: need to remap something twice, therefore use allocate_shared_filemem()
 bool prepare_jit_block(void *code_area, size_t size, void **code_area_rw, ptrdiff_t *rx_offset)
 {
+#ifdef TARGET_IPHONE
+	init_txm_jit_pool();
+
+	if (g_txm_pool.uses_txm)
+	{
+		const size_t pagesize = sysconf(_SC_PAGESIZE);
+
+		void* raw = lwmem_malloc(size + pagesize - 1 + sizeof(void*));
+		if (!raw)
+		{
+			ERROR_LOG(VMEM, "TXM: lwmem_malloc failed for size %zu", size);
+			return false;
+		}
+
+		uintptr_t raw_addr = (uintptr_t)raw + sizeof(void*);
+		uintptr_t aligned = (raw_addr + pagesize - 1) & ~(pagesize - 1);
+		((void**)aligned)[-1] = raw;
+
+		*code_area_rw = (void*)aligned;
+		*rx_offset = -g_txm_pool.rw_rx_diff;
+
+		INFO_LOG(VMEM, "TXM dual-map: RW=%p rx_offset=%td size=%zu",
+				 *code_area_rw, *rx_offset, size);
+
+		return true;
+	}
+
+	INFO_LOG(VMEM, "iOS: Using standard dual-mapping (non-TXM)");
+#endif
+
 	int fd = allocate_shared_filemem(size);
 	if (fd < 0)
 		return false;
@@ -319,6 +547,16 @@ bool prepare_jit_block(void *code_area, size_t size, void **code_area_rw, ptrdif
 
 void release_jit_block(void *code_area1, void *code_area2, size_t size)
 {
+#ifdef TARGET_IPHONE
+	if (g_txm_pool.uses_txm)
+	{
+		// code_area2 is the RW pointer
+		void* raw = ((void**)code_area2)[-1];
+		lwmem_free(raw);
+		return;
+	}
+#endif
+
 	// keep code_area1 (RX) mapped since it's statically allocated
 	munmap(code_area2, size);
 }

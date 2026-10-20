@@ -201,6 +201,9 @@ void Achievements::asyncTask(std::function<void()>&& f) {
 }
 
 void Achievements::stopThreads() {
+#ifdef __APPLE__
+	http::cancelPending();
+#endif
 	taskThread.stop();
 	idleThread.stop();
 }

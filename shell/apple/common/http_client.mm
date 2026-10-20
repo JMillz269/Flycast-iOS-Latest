@@ -1,26 +1,51 @@
-/*
-	Copyright 2022 flyinghead
-
-	This file is part of Flycast.
-
-	Flycast is free software: you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation, either version 2 of the License, or
-	(at your option) any later version.
-
-	Flycast is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	GNU General Public License for more details.
-
-	You should have received a copy of the GNU General Public License
-	along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
-*/
 #import <Foundation/Foundation.h>
 #include "oslib/http_client.h"
 #include "stdclass.h"
+#include <atomic>
 
 namespace http {
+
+static std::atomic<int> cancelGeneration { 0 };
+
+void cancelPending() {
+	cancelGeneration++;
+}
+
+// Performs the request with NSURLSession, waiting in short slices so the call can be
+// aborted by cancelPending() (otherwise a blocked request can stall thread join -> watchdog kill).
+static bool sendRequest(NSURLRequest *request, NSData **outData, NSHTTPURLResponse **outResponse)
+{
+	NSURLSessionConfiguration *config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+	config.timeoutIntervalForRequest = 10.0;
+	NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
+	dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+	__block NSData *rdata = nil;
+	__block NSURLResponse *rresp = nil;
+	__block NSError *rerr = nil;
+	NSURLSessionDataTask *task = [session dataTaskWithRequest:request
+			completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+		rdata = d; rresp = r; rerr = e;
+		dispatch_semaphore_signal(sem);
+	}];
+	int gen = cancelGeneration.load();
+	[task resume];
+	while (dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC)) != 0)
+	{
+		if (cancelGeneration.load() != gen) {
+			[task cancel];
+			dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+			break;
+		}
+	}
+	[session finishTasksAndInvalidate];
+	if (rerr != nil || ![rresp isKindOfClass:[NSHTTPURLResponse class]]) {
+		NSLog(@"[Flycast] HTTP request failed: %@", rerr);
+		return false;
+	}
+	*outData = rdata;
+	*outResponse = (NSHTTPURLResponse *)rresp;
+	return true;
+}
 
 int get(const std::string& url, std::vector<u8>& content, const Headers *reqHeaders, Headers *respHeaders)
 {
@@ -29,6 +54,7 @@ int get(const std::string& url, std::vector<u8>& content, const Headers *reqHead
     NSString *userAgent = [NSString stringWithCString:getUserAgent().c_str()
                                              encoding:[NSString defaultCStringEncoding]];
 	NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:nsurl]];
+	[urlRequest setTimeoutInterval:10.0];
 	[urlRequest setValue:userAgent forHTTPHeaderField:@"User-Agent"];
     if (reqHeaders != nullptr)
     {
@@ -41,17 +67,10 @@ int get(const std::string& url, std::vector<u8>& content, const Headers *reqHead
             [urlRequest setValue:nsvalue forHTTPHeaderField:nsname];
         }
     }
-    // TODO can't set a connection timeout apparently. Need to switch to asynchronous API
-    // but default timeout might be close to 30 s...
-	NSURLResponse *response = nil;
-	NSError *error = nil;
-	NSData *data = [NSURLConnection sendSynchronousRequest:urlRequest
-                                         returningResponse:&response
-                                                     error:&error];
-	if (error != nil)
+	NSData *data = nil;
+	NSHTTPURLResponse *httpResponse = nil;
+	if (!sendRequest(urlRequest, &data, &httpResponse))
 		return 500;
-
-	NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
 	if (respHeaders != nullptr)
 	{
 		NSDictionary *headers = httpResponse.allHeaderFields;
@@ -82,6 +101,7 @@ int post(const std::string& url, const char *payload, const char *contentType, s
 	[request setHTTPMethod:@"POST"];
 	[request setCachePolicy:NSURLRequestReloadIgnoringLocalCacheData];
 	[request setHTTPShouldHandleCookies:NO];
+	[request setTimeoutInterval:10.0];
 	
 	size_t payloadSize = strlen(payload);
 	[request setHTTPBody:[NSData dataWithBytes:payload length:payloadSize]];
@@ -93,15 +113,10 @@ int post(const std::string& url, const char *payload, const char *contentType, s
     [request setValue:nscontentType forHTTPHeaderField:@"Content-Type"];
 	[request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
     
-	NSURLResponse *response = nil;
-	NSError *error = nil;
-	NSData *data = [NSURLConnection sendSynchronousRequest:request
-                          returningResponse:&response
-                                      error:&error];
-	if (error != nil)
+	NSData *data = nil;
+	NSHTTPURLResponse *httpResponse = nil;
+	if (!sendRequest(request, &data, &httpResponse))
 		return 500;
-
-	NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response; 
 		
 	reply.clear();
 	reply.insert(reply.begin(), (const u8 *)[data bytes], (const u8 *)[data bytes] + [data length]);
@@ -119,6 +134,7 @@ int post(const std::string& url, const std::vector<PostField>& fields)
 	[request setHTTPMethod:@"POST"];
 	[request setCachePolicy:NSURLRequestReloadIgnoringLocalCacheData];
 	[request setHTTPShouldHandleCookies:NO];
+	[request setTimeoutInterval:10.0];
 
 	NSString *boundary = @"----flycast-boundary-7192397596";
 	NSString *contentType = [NSString stringWithFormat:@"multipart/form-data; boundary=%@", boundary];
@@ -161,15 +177,10 @@ int post(const std::string& url, const std::vector<PostField>& fields)
 	NSString *postLength = [NSString stringWithFormat:@"%ld", (unsigned long)[body length]];
     [request setValue:postLength forHTTPHeaderField:@"Content-Length"];
     
-	NSURLResponse *response = nil;
-	NSError *error = nil;
-	[NSURLConnection sendSynchronousRequest:request
-                          returningResponse:&response
-                                      error:&error];
-	if (error != nil)
+	NSData *data = nil;
+	NSHTTPURLResponse *httpResponse = nil;
+	if (!sendRequest(request, &data, &httpResponse))
 		return 500;
-
-	NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response; 
 	return [httpResponse statusCode];
 }
 

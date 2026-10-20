@@ -47,6 +47,18 @@
 namespace hostfs
 {
 
+#ifdef TARGET_IPHONE
+static std::string getWritableVmuPath(const std::string& vmuName)
+{
+	make_directory(get_writable_data_path("VMU"));
+	return get_writable_data_path("VMU/" + vmuName);
+}
+#else
+static std::string getWritableVmuPath(const std::string& vmuName) {
+	return get_writable_data_path(vmuName);
+}
+#endif
+
 std::string getVmuPath(const std::string& port, bool save)
 {
 	std::string vmuName;
@@ -83,7 +95,7 @@ std::string getVmuPath(const std::string& port, bool save)
 	}
 	
 	// Fall back to default paths
-	std::string wpath = get_writable_data_path(vmuName);
+	std::string wpath = getWritableVmuPath(vmuName);
 	if (save || file_exists(wpath))
 		return wpath;
 	std::string rpath = get_readonly_data_path(vmuName);

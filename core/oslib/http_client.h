@@ -30,6 +30,10 @@ namespace http {
 
 void init();
 void term();
+#ifdef __APPLE__
+// Abort in-flight requests (called before joining threads)
+void cancelPending();
+#endif
 
 using Headers = std::vector<std::pair<std::string, std::string>>;
 

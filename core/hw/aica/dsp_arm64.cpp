@@ -44,6 +44,8 @@ static ptrdiff_t rx_offset;
 
 static void JITWriteProtect(bool enable)
 {
+    if (virtmem::txm_jit_active())
+        return;     // TXM pool: RX and RW are separate mappings, nothing to toggle
     if (enable)
     	virtmem::region_set_exec(pCodeBuffer, CodeSize);
     else
@@ -441,13 +443,24 @@ void recompile()
 
 void recInit()
 {
-#ifdef FEAT_NO_RWX_PAGES
+#if defined(FEAT_NO_RWX_PAGES)
 	bool rc = virtmem::prepare_jit_block(DynCode, CodeSize, (void**)&pCodeBuffer, &rx_offset);
+#elif defined(TARGET_IPHONE)
+	bool rc;
+	rx_offset = 0;
+	if (virtmem::txm_jit_active())
+		// TXM: code is written through the RW alias and executed through the RX one
+		rc = virtmem::prepare_jit_block(DynCode, CodeSize, (void**)&pCodeBuffer, &rx_offset);
+	else
+		rc = virtmem::prepare_jit_block(DynCode, CodeSize, (void**)&pCodeBuffer);
 #else
 	bool rc = virtmem::prepare_jit_block(DynCode, CodeSize, (void**)&pCodeBuffer);
 #endif
 	verify(rc);
-#if defined(TARGET_IPHONE) || defined(TARGET_ARM_MAC)
+#if defined(TARGET_IPHONE)
+	// with TXM pCodeBuffer is the RW alias and the DSP runs through the RX mapping
+	DynCode = pCodeBuffer + rx_offset;
+#elif defined(TARGET_ARM_MAC)
 	DynCode = pCodeBuffer;
 #endif
 }
@@ -458,9 +471,17 @@ void recTerm()
 #if defined(TARGET_IPHONE) || defined(TARGET_ARM_MAC)
 	DynCode = nullptr;
 #endif
-#ifdef FEAT_NO_RWX_PAGES
+#if defined(FEAT_NO_RWX_PAGES)
 	if (pCodeBuffer != nullptr)
 		virtmem::release_jit_block(DynCode, pCodeBuffer, CodeSize);
+#elif defined(TARGET_IPHONE)
+	if (pCodeBuffer != nullptr)
+	{
+		if (virtmem::txm_jit_active())
+			virtmem::release_jit_block(DynCode, pCodeBuffer, CodeSize);
+		else
+			virtmem::release_jit_block(pCodeBuffer, CodeSize);
+	}
 #else
 	if (pCodeBuffer != nullptr && pCodeBuffer != DynCode)
 		virtmem::release_jit_block(pCodeBuffer, CodeSize);

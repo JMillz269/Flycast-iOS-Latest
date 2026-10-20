@@ -61,10 +61,3 @@ jobs:
         with:
           name: Flycast-iOS-Release
           path: artifact/Flycast-Release.ipa
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: build-log
-          path: build.log
-          if-no-files-found: ignore

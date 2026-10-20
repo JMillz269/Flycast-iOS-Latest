@@ -1392,9 +1392,6 @@ if(NOT LIBRETRO)
 				COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/Payload
 				COMMAND rm -rf ${CMAKE_CURRENT_BINARY_DIR}/Payload/*
 				COMMAND cp -r ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>-${CMAKE_OSX_SYSROOT}/Flycast.app ${CMAKE_CURRENT_BINARY_DIR}/Payload
-				COMMAND for lib in ${CMAKE_CURRENT_BINARY_DIR}/Payload/Flycast.app/Frameworks/*.dylib
-				COMMAND do xcrun bitcode_strip -r $lib -o $lib
-				COMMAND done
 				COMMAND ldid -S${CMAKE_CURRENT_SOURCE_DIR}/shell/apple/emulator-ios/emulator/flycast.entitlements ${CMAKE_CURRENT_BINARY_DIR}/Payload/Flycast.app/Flycast
 				COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>-${CMAKE_OSX_SYSROOT}/Flycast.ipa" --format=zip ${CMAKE_CURRENT_BINARY_DIR}/Payload)
 		else()

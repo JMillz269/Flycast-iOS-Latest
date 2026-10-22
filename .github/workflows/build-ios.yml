@@ -49,6 +49,13 @@ jobs:
           exit ${PIPESTATUS[0]}
         shell: bash
 
+      - name: Show optimization flags
+        run: |
+          echo "--- Xcode build setting ---"
+          xcodebuild -project build-ios/flycast.xcodeproj -target flycast -configuration Release -showBuildSettings | grep -E "GCC_OPTIMIZATION_LEVEL|OTHER_CPLUSPLUSFLAGS|OTHER_CFLAGS|SWIFT_OPTIMIZATION_LEVEL"
+          echo "--- Flags the compiler actually used ---"
+          find build-ios/build/flycast.build -name "*common-args.resp" | head -n 1 | xargs cat | tr ' ' '\n' | grep -E "^-O|^-DNDEBUG|^-flto"
+
       - name: Locate IPA
         run: |
           IPA=$(find build-ios -name "Flycast.ipa" | head -n 1)

@@ -744,6 +744,32 @@ bool checkTryDebug()
 			[self.padController hideController];
 	}
 #endif
+
+	// Switch graphics API at runtime (the desktop render loop does this, the iOS one doesn't)
+	static RenderType activeRenderer = config::RendererType;
+	if (config::RendererType != activeRenderer)
+	{
+		const bool apiChanged = isVulkan(activeRenderer) != isVulkan(config::RendererType);
+		mainui_term();
+		if (apiChanged)
+		{
+			try {
+				switchRenderApi();
+			} catch (const std::exception& e) {
+				NSLog(@"switchRenderApi failed: %s", e.what());
+				// go back to the previous API
+				config::RendererType = activeRenderer;
+				try {
+					switchRenderApi();
+				} catch (const std::exception& e2) {
+					NSLog(@"Falling back to the previous renderer also failed: %s", e2.what());
+				}
+			}
+		}
+		mainui_init();
+		activeRenderer = config::RendererType;
+	}
+	
 	// Show the Metal surface only when the Vulkan renderer is active
 	const bool useMetal = isVulkan(config::RendererType);
 	if (self.metalView.hidden == useMetal)

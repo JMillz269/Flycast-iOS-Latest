@@ -22,11 +22,11 @@
 #include "osx.h"
 
 void OSXGraphicsContext::Create(void *window, void *display) {
-	new OSXGraphicsContext();
+	new OSXGraphicsContext(window, display);
 }
 
-OSXGraphicsContext::OSXGraphicsContext()
-	: GLGraphicsContext(nullptr, nullptr)
+OSXGraphicsContext::OSXGraphicsContext(void *window, void *display)
+	: GLGraphicsContext(window, display)
 {
 	postInit();
 }

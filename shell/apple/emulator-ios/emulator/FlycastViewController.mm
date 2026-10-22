@@ -25,6 +25,7 @@
 #import <OpenGLES/ES3/gl.h>
 #import <OpenGLES/ES3/glext.h>
 #import <OpenGLES/EAGL.h>
+#import <QuartzCore/CAMetalLayer.h>
 #import <sys/syscall.h>
 #import <dlfcn.h>
 
@@ -46,6 +47,16 @@
 #include "oslib/i18n.h"
 
 #import "AltKit-Swift.h"
+
+// View backed by a CAMetalLayer, used as the presentation surface when the Vulkan (MoltenVK) renderer is selected
+@interface FCMetalView : UIView
+@end
+
+@implementation FCMetalView
++ (Class)layerClass {
+	return [CAMetalLayer class];
+}
+@end
 
 static std::string iosJitStatus;
 static bool iosJitAuthorized;
@@ -149,6 +160,7 @@ static void updateAudioSession(Event event, void *)
 @interface FlycastViewController () <UIDocumentPickerDelegate, UITextFieldDelegate>
 
 @property (strong, nonatomic) EAGLContext *context;
+@property (strong, nonatomic) FCMetalView *metalView;
 @property (strong, nonatomic) PadViewController *padController;
 @property (strong, nonatomic) EditPadViewController *editPadController;
 
@@ -331,7 +343,24 @@ static void updateAudioSession(Event event, void *)
 	  scale = [[UIScreen mainScreen] scale];
 	}
 	settings.display.dpi = 160.f * scale;
-	initRenderApi();
+
+	// Presentation surface for the Vulkan renderer (MoltenVK). Shown only when Vulkan is active.
+	{
+		CGSize screenSize = [[UIScreen mainScreen] bounds].size;
+		CGFloat w = MAX(screenSize.width, screenSize.height);
+		CGFloat h = MIN(screenSize.width, screenSize.height);
+		self.metalView = [[FCMetalView alloc] initWithFrame:CGRectMake(0, 0, w, h)];
+		self.metalView.userInteractionEnabled = NO;
+		self.metalView.hidden = YES;
+		self.metalView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+		self.metalView.contentScaleFactor = scale;
+		CAMetalLayer *metalLayer = (CAMetalLayer *)self.metalView.layer;
+		metalLayer.contentsScale = scale;
+		metalLayer.drawableSize = CGSizeMake(settings.display.width, settings.display.height);
+		[self.view insertSubview:self.metalView atIndex:0];
+	}
+	initRenderApi((__bridge void *)self.metalView.layer);
+	
 #if TARGET_OS_SIMULATOR == 1 && HOST_CPU == CPU_ARM64
 	if (config::RendererType.get() == RenderType::OpenGL)
 	{
@@ -715,6 +744,10 @@ bool checkTryDebug()
 			[self.padController hideController];
 	}
 #endif
+	// Show the Metal surface only when the Vulkan renderer is active
+	const bool useMetal = isVulkan(config::RendererType);
+	if (self.metalView.hidden == useMetal)
+		self.metalView.hidden = !useMetal;
 	mainui_rend_frame();
 }
 

@@ -59,8 +59,8 @@ jobs:
             -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_XCODE_ATTRIBUTE_GCC_OPTIMIZATION_LEVEL=3 \
-            -DCMAKE_BUILD_TYPE=$BUILD_TYPE
-            -DMOLTENVK_IOS_LIB=${{ steps.moltenvk.outputs.lib }} \
+            -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+            -DMOLTENVK_IOS_LIB=${{ steps.moltenvk.outputs.lib }}
 
       - name: Build Release (also produces Flycast.ipa)
         run: |

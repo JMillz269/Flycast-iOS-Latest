@@ -328,6 +328,9 @@ void gui_settings_video()
     {
     	OptionCheckbox(T("Delay Frame Swapping"), config::DelayFrameSwapping,
     			T("Useful to avoid flashing screen or glitchy videos. Not recommended on slow platforms"));
+    	OptionSlider(T("Texture Upscaling (xBRZ)"), config::TextureUpscale, 1, 6,
+    			T("Upscale textures with the xBRZ filter. 1 = off. Works best on 2D art, sprites and text. Runs on the CPU and can slow down loading new textures; higher values use more memory."),
+    			"%dx");
     	OptionCheckbox(T("Fix Upscale Bleeding Edge"), config::FixUpscaleBleedingEdge,
     			T("Helps with texture bleeding case when upscaling. Disabling it can help if pixels are warping when upscaling in 2D games (MVC2, CVS, KOF, etc.)"));
     	OptionCheckbox(T("Native Depth Interpolation"), config::NativeDepthInterpolation,

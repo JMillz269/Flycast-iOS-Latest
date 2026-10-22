@@ -351,7 +351,6 @@ static void updateAudioSession(Event event, void *)
 		CGFloat h = MIN(screenSize.width, screenSize.height);
 		self.metalView = [[FCMetalView alloc] initWithFrame:CGRectMake(0, 0, w, h)];
 		self.metalView.userInteractionEnabled = NO;
-		self.metalView.hidden = YES;
 		self.metalView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 		self.metalView.contentScaleFactor = scale;
 		CAMetalLayer *metalLayer = (CAMetalLayer *)self.metalView.layer;
@@ -770,10 +769,6 @@ bool checkTryDebug()
 		activeRenderer = config::RendererType;
 	}
 	
-	// Show the Metal surface only when the Vulkan renderer is active
-	const bool useMetal = isVulkan(config::RendererType);
-	if (self.metalView.hidden == useMetal)
-		self.metalView.hidden = !useMetal;
 	mainui_rend_frame();
 }
 

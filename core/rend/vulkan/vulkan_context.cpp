@@ -141,6 +141,14 @@ static void CheckImGuiResult(VkResult err)
 }
 #endif
 
+#if defined(TARGET_IPHONE) && !defined(USE_SDL)
+// MoltenVK is statically linked on iOS: use its entry point directly instead of dlopen()
+extern "C" VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(VkInstance instance, const char *pName);
+static PFN_vkGetInstanceProcAddr getStaticVkGetInstanceProcAddr() {
+	return &vkGetInstanceProcAddr;
+}
+#endif
+
 bool VulkanContext::InitInstance(const char** extensions, uint32_t extensions_count)
 {
 	try
@@ -149,6 +157,10 @@ bool VulkanContext::InitInstance(const char** extensions, uint32_t extensions_co
 		PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = nullptr;
 #if defined(__ANDROID__) && HOST_CPU == CPU_ARM64
 		vkGetInstanceProcAddr = loadVulkanDriver();
+
+#elif defined(TARGET_IPHONE) && !defined(USE_SDL)
+		vkGetInstanceProcAddr = getStaticVkGetInstanceProcAddr();
+		
 #elif defined(__APPLE__) && defined(USE_SDL)
 		vkGetInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(SDL_Vulkan_GetVkGetInstanceProcAddr());
 #else

@@ -30,6 +30,6 @@ public:
 	static void Create(void *window = nullptr, void *display = nullptr);
 
 private:
-	OSXGraphicsContext();
+	OSXGraphicsContext(void *window, void *display);
 };
 #endif

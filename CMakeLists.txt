@@ -29,7 +29,7 @@ endif()
 
 if(APPLE)
 	if(CMAKE_SYSTEM_NAME STREQUAL iOS)
-		set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum iOS deployment version")
+		set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum iOS deployment version")
 		set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "")
 	elseif(CMAKE_SYSTEM_NAME STREQUAL tvOS)
 		set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum tvOS deployment version")
@@ -108,7 +108,13 @@ option(USE_DISCORD "Use Discord Presence API" OFF)
 option(USE_LIBCDIO "Use libcdio for CDROM access" OFF)
 
 if(IOS AND NOT LIBRETRO)
-	set(USE_VULKAN OFF CACHE BOOL "Force vulkan off" FORCE)
+	set(MOLTENVK_IOS_LIB "" CACHE FILEPATH "Path to the iOS (device) static libMoltenVK.a")
+	if(MOLTENVK_IOS_LIB AND EXISTS "${MOLTENVK_IOS_LIB}")
+		message(STATUS "iOS: using MoltenVK at ${MOLTENVK_IOS_LIB}, Vulkan renderer enabled")
+	else()
+		message(STATUS "iOS: MOLTENVK_IOS_LIB not set, Vulkan renderer disabled")
+		set(USE_VULKAN OFF CACHE BOOL "Force vulkan off" FORCE)
+	endif()
 endif()
 
 if(WEBOS)
@@ -1390,6 +1396,19 @@ if(NOT LIBRETRO)
 				${GAMECONTROLLER}
 				${AUDIOTOOLBOX}
 				${AVFOUNDATION})
+
+				if(USE_VULKAN)
+				find_library(METAL_FRAMEWORK Metal)
+				find_library(QUARTZCORE_FRAMEWORK QuartzCore)
+				find_library(IOSURFACE_FRAMEWORK IOSurface)
+				find_library(COREGRAPHICS_FRAMEWORK CoreGraphics)
+				target_link_libraries(${PROJECT_NAME} PRIVATE
+					"${MOLTENVK_IOS_LIB}"
+					${METAL_FRAMEWORK}
+					${QUARTZCORE_FRAMEWORK}
+					${IOSURFACE_FRAMEWORK}
+					${COREGRAPHICS_FRAMEWORK})
+			endif()
 
 			add_custom_target(Flycast.IPA ALL
 				DEPENDS ${PROJECT_NAME}

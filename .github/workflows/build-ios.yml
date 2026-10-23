@@ -1,8 +1,6 @@
 name: iOS Release IPA
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -34,6 +32,23 @@ jobs:
       - name: Build OpenMP.xcframework
         run: ./shell/apple/emulator-ios/OpenMP/build_ios_openmp.sh --disableSimulator
 
+      - name: Fetch MoltenVK (iOS static library)
+        id: moltenvk
+        run: |
+          set -e
+          MVK_TAG=v1.4.2
+          mkdir -p mvk && cd mvk
+          for asset in MoltenVK-ios.tar MoltenVK-all.tar; do
+            if curl -fL -o "$asset" "https://github.com/KhronosGroup/MoltenVK/releases/download/${MVK_TAG}/${asset}"; then
+              tar xf "$asset"; break
+            fi
+          done
+          find . -name "*.xcframework" -maxdepth 6
+          LIB=$(find "$PWD" -path "*ios-arm64/*" -name "libMoltenVK.a" | head -n 1)
+          echo "Using: $LIB"
+          test -n "$LIB"
+          echo "lib=$LIB" >> "$GITHUB_OUTPUT"
+
       # Fresh build dir on purpose: the repo's committed build/ folder is a
       # generated Xcode project with absolute /Users/... paths.
       - name: Configure
@@ -42,20 +57,14 @@ jobs:
             -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_XCODE_ATTRIBUTE_GCC_OPTIMIZATION_LEVEL=3 \
-            -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+            -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+            -DMOLTENVK_IOS_LIB=${{ steps.moltenvk.outputs.lib }}
 
       - name: Build Release (also produces Flycast.ipa)
         run: |
           cmake --build build-ios --config $BUILD_TYPE 2>&1 | tee build.log | tail -n 150
           exit ${PIPESTATUS[0]}
         shell: bash
-
-      - name: Show optimization flags
-        run: |
-          echo "--- Xcode build setting ---"
-          xcodebuild -project build-ios/flycast.xcodeproj -target flycast -configuration Release -showBuildSettings | grep -E "GCC_OPTIMIZATION_LEVEL|OTHER_CPLUSPLUSFLAGS|OTHER_CFLAGS|SWIFT_OPTIMIZATION_LEVEL"
-          echo "--- Flags the compiler actually used ---"
-          find build-ios/build/flycast.build -name "*common-args.resp" | head -n 1 | xargs cat | tr ' ' '\n' | grep -E "^-O|^-DNDEBUG|^-flto"
 
       - name: Locate IPA
         run: |

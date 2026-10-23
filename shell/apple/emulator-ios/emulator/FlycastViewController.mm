@@ -25,6 +25,7 @@
 #import <OpenGLES/ES3/gl.h>
 #import <OpenGLES/ES3/glext.h>
 #import <OpenGLES/EAGL.h>
+#import <QuartzCore/CAMetalLayer.h>
 #import <sys/syscall.h>
 #import <dlfcn.h>
 
@@ -35,6 +36,7 @@
 #include "types.h"
 #include "wsi/context.h"
 #include "ui/mainui.h"
+#include "ui/imgui_driver.h"
 #include "emulator.h"
 #include "log/LogManager.h"
 #include "stdclass.h"
@@ -46,6 +48,16 @@
 #include "oslib/i18n.h"
 
 #import "AltKit-Swift.h"
+
+// View backed by a CAMetalLayer, used as the presentation surface when the Vulkan (MoltenVK) renderer is selected
+@interface FCMetalView : UIView
+@end
+
+@implementation FCMetalView
++ (Class)layerClass {
+	return [CAMetalLayer class];
+}
+@end
 
 static std::string iosJitStatus;
 static bool iosJitAuthorized;
@@ -149,6 +161,7 @@ static void updateAudioSession(Event event, void *)
 @interface FlycastViewController () <UIDocumentPickerDelegate, UITextFieldDelegate>
 
 @property (strong, nonatomic) EAGLContext *context;
+@property (strong, nonatomic) FCMetalView *metalView;
 @property (strong, nonatomic) PadViewController *padController;
 @property (strong, nonatomic) EditPadViewController *editPadController;
 
@@ -331,7 +344,22 @@ static void updateAudioSession(Event event, void *)
 	  scale = [[UIScreen mainScreen] scale];
 	}
 	settings.display.dpi = 160.f * scale;
-	initRenderApi();
+
+	// Presentation surface for the Vulkan renderer (MoltenVK). Shown only when Vulkan is active.
+	{
+		CGSize screenSize = [[UIScreen mainScreen] bounds].size;
+		CGFloat w = MAX(screenSize.width, screenSize.height);
+		CGFloat h = MIN(screenSize.width, screenSize.height);
+		self.metalView = [[FCMetalView alloc] initWithFrame:CGRectMake(0, 0, w, h)];
+		self.metalView.userInteractionEnabled = NO;
+		self.metalView.contentScaleFactor = scale;
+		CAMetalLayer *metalLayer = (CAMetalLayer *)self.metalView.layer;
+		metalLayer.contentsScale = scale;
+		metalLayer.drawableSize = CGSizeMake(settings.display.width, settings.display.height);
+		[self.view insertSubview:self.metalView atIndex:0];
+	}
+	initRenderApi((__bridge void *)self.metalView.layer);
+	
 #if TARGET_OS_SIMULATOR == 1 && HOST_CPU == CPU_ARM64
 	if (config::RendererType.get() == RenderType::OpenGL)
 	{
@@ -704,8 +732,15 @@ bool checkTryDebug()
 
 }
 
-- (void)glkView:(GLKView *)view drawInRect:(CGRect)rect
+- (void)viewDidLayoutSubviews
 {
+	[super viewDidLayoutSubviews];
+	if (self.metalView != nil && self.metalView.superview == self.view)
+		self.metalView.frame = self.view.bounds;
+}
+
+- (void)glkView:(GLKView *)view drawInRect:(CGRect)rect
+{ 	
 #if !TARGET_OS_TV
 	if (emu.running() != [self.padController isControllerVisible] && !IOSGamepad::controllerConnected())
 	{
@@ -715,7 +750,50 @@ bool checkTryDebug()
 			[self.padController hideController];
 	}
 #endif
-	mainui_rend_frame();
+
+	// Switch graphics API at runtime (the desktop render loop does this, the iOS one doesn't)
+	static RenderType activeRenderer = config::RendererType;
+	if (config::RendererType != activeRenderer)
+	{
+		const bool apiChanged = isVulkan(activeRenderer) != isVulkan(config::RendererType);
+        // Put the Metal view back in the hierarchy *before* Vulkan creates its swapchain on it
+        if (isVulkan(config::RendererType) && self.metalView.superview == nil) {
+            self.metalView.hidden = NO;
+            [self.view insertSubview:self.metalView atIndex:0];
+            [self.view layoutIfNeeded];
+            [CATransaction flush];
+        }
+		mainui_term();
+		if (apiChanged)
+		{
+			try {
+				switchRenderApi();
+			} catch (const std::exception& e) {
+				NSLog(@"switchRenderApi failed: %s", e.what());
+				// go back to the previous API
+				config::RendererType = activeRenderer;
+				try {
+					switchRenderApi();
+				} catch (const std::exception& e2) {
+					NSLog(@"Falling back to the previous renderer also failed: %s", e2.what());
+				}
+			}
+		}
+		mainui_init();
+		activeRenderer = config::RendererType;
+        // Take the Metal view out of the hierarchy entirely while OpenGL is active
+        if (!isVulkan(config::RendererType))
+            [self.metalView removeFromSuperview];
+	}
+
+	if (mainui_rend_frame() && isVulkan(config::RendererType) && imguiDriver != nullptr)
+	{
+		try {
+			imguiDriver->present();
+		} catch (const std::exception& e) {
+			NSLog(@"Vulkan present failed: %s", e.what());
+		}
+	}
 }
 
 - (void)setVGamepadEditMode:(BOOL)editing

@@ -769,7 +769,14 @@ NSLog(@"FC: drawInRect");
 		mainui_init();
 		activeRenderer = config::RendererType;
 	}
-	
+
+		static int fcViewLogs = 0;
+	if (isVulkan(config::RendererType) && fcViewLogs++ < 3)
+		NSLog(@"FC: metalView hidden=%d alpha=%.2f frame=%@ window=%p superview=%p drawableSize=%@",
+			self.metalView.hidden, self.metalView.alpha,
+			NSStringFromCGRect(self.metalView.frame), self.metalView.window, self.metalView.superview,
+			NSStringFromCGSize(((CAMetalLayer *)self.metalView.layer).drawableSize));
+
 	mainui_rend_frame();
 }
 

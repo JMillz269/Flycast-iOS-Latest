@@ -36,6 +36,7 @@
 #include "types.h"
 #include "wsi/context.h"
 #include "ui/mainui.h"
+#include "ui/imgui_driver.h"
 #include "emulator.h"
 #include "log/LogManager.h"
 #include "stdclass.h"
@@ -782,7 +783,14 @@ NSLog(@"FC: drawInRect");
 			(unsigned long)((CAMetalLayer *)self.metalView.layer).pixelFormat,
 			((CAMetalLayer *)self.metalView.layer).framebufferOnly);
 
-	mainui_rend_frame();
+	if (mainui_rend_frame() && isVulkan(config::RendererType) && imguiDriver != nullptr)
+	{
+		try {
+			imguiDriver->present();
+		} catch (const std::exception& e) {
+			NSLog(@"Vulkan present failed: %s", e.what());
+		}
+	}
 }
 
 - (void)setVGamepadEditMode:(BOOL)editing

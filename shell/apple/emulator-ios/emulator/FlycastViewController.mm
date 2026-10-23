@@ -352,7 +352,6 @@ static void updateAudioSession(Event event, void *)
 		CGFloat h = MIN(screenSize.width, screenSize.height);
 		self.metalView = [[FCMetalView alloc] initWithFrame:CGRectMake(0, 0, w, h)];
 		self.metalView.userInteractionEnabled = NO;
-		self.metalView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 		self.metalView.contentScaleFactor = scale;
 		CAMetalLayer *metalLayer = (CAMetalLayer *)self.metalView.layer;
 		metalLayer.contentsScale = scale;
@@ -731,6 +730,13 @@ bool checkTryDebug()
 - (void)update
 {
 
+}
+
+- (void)viewDidLayoutSubviews
+{
+	[super viewDidLayoutSubviews];
+	if (self.metalView != nil && self.metalView.superview == self.view)
+		self.metalView.frame = self.view.bounds;
 }
 
 - (void)glkView:(GLKView *)view drawInRect:(CGRect)rect

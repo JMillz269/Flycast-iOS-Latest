@@ -49,6 +49,13 @@ jobs:
           test -n "$LIB"
           echo "lib=$LIB" >> "$GITHUB_OUTPUT"
 
+      - name: Show MoltenVK config options
+        run: |
+          H=$(find mvk -name mvk_config.h | head -n 1)
+          echo "$H"
+          grep -n -B2 -A14 "MVKVkSemaphoreSupportStyle\|MVKUseMetalArgumentBuffers" "$H" | head -120
+
+
       # Fresh build dir on purpose: the repo's committed build/ folder is a
       # generated Xcode project with absolute /Users/... paths.
       - name: Configure

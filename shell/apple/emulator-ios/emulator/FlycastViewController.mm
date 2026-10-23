@@ -751,9 +751,11 @@ NSLog(@"FC: drawInRect");
 	if (config::RendererType != activeRenderer)
 	{
 		const bool apiChanged = isVulkan(activeRenderer) != isVulkan(config::RendererType);
-		        // Make sure the Metal layer is visible *before* Vulkan creates its swapchain on it
-        if (isVulkan(config::RendererType)) {
+        // Put the Metal view back in the hierarchy *before* Vulkan creates its swapchain on it
+        if (isVulkan(config::RendererType) && self.metalView.superview == nil) {
             self.metalView.hidden = NO;
+            [self.view insertSubview:self.metalView atIndex:0];
+            [self.view layoutIfNeeded];
             [CATransaction flush];
         }
 		mainui_term();
@@ -774,8 +776,9 @@ NSLog(@"FC: drawInRect");
 		}
 		mainui_init();
 		activeRenderer = config::RendererType;
-		        // Only show the Metal layer while Vulkan is the active renderer
-        self.metalView.hidden = !isVulkan(config::RendererType);
+        // Take the Metal view out of the hierarchy entirely while OpenGL is active
+        if (!isVulkan(config::RendererType))
+            [self.metalView removeFromSuperview];
 	}
 
 	static int fcViewFrames = 0;

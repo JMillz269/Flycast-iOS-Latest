@@ -733,7 +733,8 @@ bool checkTryDebug()
 }
 
 - (void)glkView:(GLKView *)view drawInRect:(CGRect)rect
-{
+{ 	
+NSLog(@"FC: drawInRect");
 #if !TARGET_OS_TV
 	if (emu.running() != [self.padController isControllerVisible] && !IOSGamepad::controllerConnected())
 	{

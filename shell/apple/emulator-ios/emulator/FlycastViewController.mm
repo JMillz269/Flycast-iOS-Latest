@@ -351,6 +351,7 @@ static void updateAudioSession(Event event, void *)
 		CGFloat h = MIN(screenSize.width, screenSize.height);
 		self.metalView = [[FCMetalView alloc] initWithFrame:CGRectMake(0, 0, w, h)];
 		self.metalView.userInteractionEnabled = NO;
+		self.metalView.layer.backgroundColor = [UIColor redColor].CGColor;
 		self.metalView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 		self.metalView.contentScaleFactor = scale;
 		CAMetalLayer *metalLayer = (CAMetalLayer *)self.metalView.layer;
@@ -770,11 +771,12 @@ NSLog(@"FC: drawInRect");
 		activeRenderer = config::RendererType;
 	}
 
-		static int fcViewLogs = 0;
-	if (isVulkan(config::RendererType) && fcViewLogs++ < 3)
-		NSLog(@"FC: metalView hidden=%d alpha=%.2f frame=%@ window=%p superview=%p drawableSize=%@",
+			static int fcViewFrames = 0;
+	if ((fcViewFrames++ % 120) == 0)
+		NSLog(@"FC: metalView hidden=%d alpha=%.2f frame=%@ window=%p superview=%p layerClass=%@ drawable=%@",
 			self.metalView.hidden, self.metalView.alpha,
 			NSStringFromCGRect(self.metalView.frame), self.metalView.window, self.metalView.superview,
+			NSStringFromClass([self.metalView.layer class]),
 			NSStringFromCGSize(((CAMetalLayer *)self.metalView.layer).drawableSize));
 
 	mainui_rend_frame();

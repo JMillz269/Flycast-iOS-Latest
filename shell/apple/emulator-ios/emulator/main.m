@@ -26,9 +26,6 @@
 int main(int argc, char * argv[])
 {
     @autoreleasepool {
-        setenv("MVK_CONFIG_LOG_LEVEL", "3", 1);
-        NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES)[0];
-        freopen([[docs stringByAppendingPathComponent:@"moltenvk.log"] fileSystemRepresentation], "a", stderr);
         return UIApplicationMain(argc, argv, nil, NSStringFromClass([AppDelegate class]));
     }
 }

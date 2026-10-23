@@ -741,7 +741,6 @@ bool checkTryDebug()
 
 - (void)glkView:(GLKView *)view drawInRect:(CGRect)rect
 { 	
-NSLog(@"FC: drawInRect");
 #if !TARGET_OS_TV
 	if (emu.running() != [self.padController isControllerVisible] && !IOSGamepad::controllerConnected())
 	{
@@ -786,17 +785,6 @@ NSLog(@"FC: drawInRect");
         if (!isVulkan(config::RendererType))
             [self.metalView removeFromSuperview];
 	}
-
-	static int fcViewFrames = 0;
-	if ((fcViewFrames++ % 120) == 0)
-		NSLog(@"FC: metalView hidden=%d alpha=%.2f frame=%@ window=%p superview=%p layerClass=%@ drawable=%@ opaque=%d pixfmt=%lu fbOnly=%d",
-			self.metalView.hidden, self.metalView.alpha,
-			NSStringFromCGRect(self.metalView.frame), self.metalView.window, self.metalView.superview,
-			NSStringFromClass([self.metalView.layer class]),
-			NSStringFromCGSize(((CAMetalLayer *)self.metalView.layer).drawableSize),
-			((CAMetalLayer *)self.metalView.layer).isOpaque,
-			(unsigned long)((CAMetalLayer *)self.metalView.layer).pixelFormat,
-			((CAMetalLayer *)self.metalView.layer).framebufferOnly);
 
 	if (mainui_rend_frame() && isVulkan(config::RendererType) && imguiDriver != nullptr)
 	{

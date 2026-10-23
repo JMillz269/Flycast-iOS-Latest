@@ -49,13 +49,6 @@ jobs:
           test -n "$LIB"
           echo "lib=$LIB" >> "$GITHUB_OUTPUT"
 
-      - name: Show MoltenVK config options
-        run: |
-          H=$(find mvk -name mvk_config.h | head -n 1)
-          echo "$H"
-          grep -n -B2 -A14 "MVKVkSemaphoreSupportStyle\|MVKUseMetalArgumentBuffers" "$H" | head -120
-
-
       # Fresh build dir on purpose: the repo's committed build/ folder is a
       # generated Xcode project with absolute /Users/... paths.
       - name: Configure
@@ -72,13 +65,6 @@ jobs:
           cmake --build build-ios --config $BUILD_TYPE 2>&1 | tee build.log | tail -n 150
           exit ${PIPESTATUS[0]}
         shell: bash
-
-      - name: Show optimization flags
-        run: |
-          echo "--- Xcode build setting ---"
-          xcodebuild -project build-ios/flycast.xcodeproj -target flycast -configuration Release -showBuildSettings | grep -E "GCC_OPTIMIZATION_LEVEL|OTHER_CPLUSPLUSFLAGS|OTHER_CFLAGS|SWIFT_OPTIMIZATION_LEVEL"
-          echo "--- Flags the compiler actually used ---"
-          find build-ios/build/flycast.build -name "*common-args.resp" | head -n 1 | xargs cat | tr ' ' '\n' | grep -E "^-O|^-DNDEBUG|^-flto"
 
       - name: Locate IPA
         run: |

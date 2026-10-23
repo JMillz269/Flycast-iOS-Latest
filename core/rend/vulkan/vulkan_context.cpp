@@ -1066,6 +1066,9 @@ void VulkanContext::Present() noexcept
 		try {
 			DoSwapAutomation();
 			vk::Result res = swappyvk::present(presentQueue, vk::PresentInfoKHR(1, &(*renderCompleteSemaphores[currentSemaphore]), 1, &(*swapChain), &currentImage));
+			static int fcPresents = 0;
+			if (fcPresents++ < 5)
+				NOTICE_LOG(RENDERER, "FC: present result %d", (int)res);
 #if defined(VK_USE_PLATFORM_METAL_EXT) || defined(__APPLE__)
 			// presentKHR lists eSuboptimalKHR as a success code so it is
 			// returned rather than thrown. Treat it as a request to
@@ -1102,6 +1105,7 @@ void VulkanContext::Present() noexcept
 #endif
 		} catch (const vk::SystemError& e) {
 			// Happens when resizing the window
+			NOTICE_LOG(RENDERER, "FC: present SystemError %s", e.what());
 			INFO_LOG(RENDERER, "vk::SystemError %s", e.what());
 			resized = true;
 			width = height = 0;

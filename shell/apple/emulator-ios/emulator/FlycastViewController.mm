@@ -751,6 +751,11 @@ NSLog(@"FC: drawInRect");
 	if (config::RendererType != activeRenderer)
 	{
 		const bool apiChanged = isVulkan(activeRenderer) != isVulkan(config::RendererType);
+		        // Make sure the Metal layer is visible *before* Vulkan creates its swapchain on it
+        if (isVulkan(config::RendererType)) {
+            self.metalView.hidden = NO;
+            [CATransaction flush];
+        }
 		mainui_term();
 		if (apiChanged)
 		{

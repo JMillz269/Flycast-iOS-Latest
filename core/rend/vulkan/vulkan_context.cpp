@@ -1000,14 +1000,19 @@ bool VulkanContext::recreateSwapChainIfNeeded()
 
 void VulkanContext::NewFrame()
 {
+	NOTICE_LOG(RENDERER, "FC: NewFrame begin");
 	recreateSwapChainIfNeeded();
 	if (!IsValid())
 		throw InvalidVulkanContext();
+	NOTICE_LOG(RENDERER, "FC: acquireNextImage...");
 	vk::Result res = device->acquireNextImageKHR(*swapChain, UINT64_MAX, *imageAcquiredSemaphores[currentSemaphore], nullptr, &currentImage);
+	NOTICE_LOG(RENDERER, "FC: acquired image %u res %d", currentImage, (int)res);
 	if (res != vk::Result::eSuccess)
 		throw InvalidVulkanContext();
 	try {
+		NOTICE_LOG(RENDERER, "FC: waiting fence...");
 		res = device->waitForFences(*drawFences[currentImage], true, UINT64_MAX);
+		NOTICE_LOG(RENDERER, "FC: fence done res %d", (int)res);
 		if (res != vk::Result::eSuccess)
 			throw InvalidVulkanContext();
 	} catch (const vk::SystemError& e) {
@@ -1045,8 +1050,10 @@ void VulkanContext::EndFrame(vk::CommandBuffer overlayCmdBuffer)
 		allCmdBuffers.push_back(overlayCmdBuffer);
 	allCmdBuffers.push_back(commandBuffer);
 	vk::SubmitInfo submitInfo(*imageAcquiredSemaphores[currentSemaphore], wait_stage, allCmdBuffers, *renderCompleteSemaphores[currentSemaphore]);
-	device->resetFences(*drawFences[currentImage]);
+		device->resetFences(*drawFences[currentImage]);
+	NOTICE_LOG(RENDERER, "FC: EndFrame submit");
 	graphicsQueue.submit(submitInfo, *drawFences[currentImage]);
+	NOTICE_LOG(RENDERER, "FC: submitted");
 	assert(rendering);
 	rendering = false;
 	renderDone = true;

@@ -25,7 +25,9 @@ BIOS files go in Files, Documents, BIOS
 <li>App allocates 64MB for JIT so it always falls within an allowed address range. App core should only use ~16MB anyway. We don't need much.</li>
 <li>Fixed OpenMP iOS support. Can max out resolution settings on my iPhone 16 Pro Max at full speed</li>
 <li>Fixed DSP and VMU sounds. In Audio settings, Enable DSP/Enable VMU Sounds no longer crashes the app when a game is launched</li>
-<li>Retains all support for Dreamcast, Naomi, Naomi 2, and Atomiswave</ul></li>
+<li>Retains all support for Dreamcast, Naomi, Naomi 2, and Atomiswave</li>
+<li>New renderer Vulkan (MoltenVK to Metal) in video settings!</li>
+<li>Exposes xBRZ upscaling for 2D textures in games. Works best with Vulkan. 
 <br>
 <br>
 <br>

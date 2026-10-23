@@ -352,7 +352,6 @@ static void updateAudioSession(Event event, void *)
 		CGFloat h = MIN(screenSize.width, screenSize.height);
 		self.metalView = [[FCMetalView alloc] initWithFrame:CGRectMake(0, 0, w, h)];
 		self.metalView.userInteractionEnabled = NO;
-		self.metalView.layer.backgroundColor = [UIColor redColor].CGColor;
 		self.metalView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 		self.metalView.contentScaleFactor = scale;
 		CAMetalLayer *metalLayer = (CAMetalLayer *)self.metalView.layer;
@@ -770,6 +769,8 @@ NSLog(@"FC: drawInRect");
 		}
 		mainui_init();
 		activeRenderer = config::RendererType;
+		        // Only show the Metal layer while Vulkan is the active renderer
+        self.metalView.hidden = !isVulkan(config::RendererType);
 	}
 
 	static int fcViewFrames = 0;

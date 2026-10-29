@@ -10,12 +10,14 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <cerrno>
+#include <cstring>
 #include <unistd.h>
 
 #include "hw/mem/addrspace.h"
 #include "hw/sh4/sh4_if.h"
 #include "oslib/virtmem.h"
 #include "log/Log.h"
+#include "log/CrashDiag.h"
 
 #ifndef MAP_NOSYNC
 #define MAP_NOSYNC 0
@@ -275,6 +277,27 @@ struct TXMPoolInfo {
 TXMPoolInfo g_txm_pool;  // Now in virtmem namespace
 
 #ifdef TARGET_IPHONE
+#ifdef FLYCAST_DIAG
+#include <atomic>
+#include <chrono>
+#include <thread>
+#include <sys/sysctl.h>
+
+// True when a debugger is attached *right now* (P_TRACED). ios_process_is_debugged() only reads CS_DEBUGGED,
+// which is sticky: it stays set after a debugger has detached.
+static int diagProcessIsTraced()
+{
+    int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid() };
+    struct kinfo_proc info;
+    size_t len = sizeof(info);
+    memset(&info, 0, sizeof(info));
+    if (sysctl(mib, 4, &info, &len, nullptr, 0) != 0)
+        return -1;
+    return (info.kp_proc.p_flag & P_TRACED) ? 1 : 0;
+}
+
+static std::atomic<int> diagBrkState{0}; // 0 = not reached, 1 = in brk, 2 = returned
+#endif
 static bool init_txm_jit_pool();
 
 // True when JIT code lives in the TXM dual-mapped pool. Initialises the pool on first use.
@@ -323,6 +346,35 @@ static bool init_txm_jit_pool()
     NOTICE_LOG(VMEM, "Registering with TXM via brk #0xf00d (universal.js)...");
 
     if (has_txm) {
+#ifdef FLYCAST_DIAG
+        DIAG_STEP(VMEM, "TXM: RX region %p size 0x%zx, pid %d, debugger attached now (P_TRACED): %d, CS_DEBUGGED: %d",
+                (void *)rx_ptr, size, (int)getpid(), diagProcessIsTraced(), (int)is_debugged);
+        diagBrkState = 1;
+        // watchdog: report if the debugger never resumes this thread
+        std::thread([]() {
+            for (int waited : { 5, 10, 15, 30 }) {
+                std::this_thread::sleep_for(std::chrono::seconds(waited));
+                if (diagBrkState.load() != 1)
+                    return;
+                ERROR_LOG(VMEM, "TXM: brk #0xf00d (prepare region) has not returned after %d more seconds: "
+                        "the debugger script is not resuming this thread", waited);
+            }
+        }).detach();
+        DIAG_STEP(VMEM, "TXM: executing brk #0xf00d, x16=1 (prepare region)");
+        uint64_t x0_after = 0;
+        __asm__ volatile (
+            "mov x0, %1\n"
+            "mov x1, %2\n"
+            "mov x16, #1\n"
+            "brk #0xf00d\n"
+            "mov %0, x0"
+            : "=&r" (x0_after)
+            : "r" (rx_ptr), "r" (size)
+            : "x0", "x1", "x16", "memory"
+        );
+        diagBrkState = 2;
+        DIAG_STEP(VMEM, "TXM: brk #0xf00d returned, x0 = 0x%llx (expected %p)", (unsigned long long)x0_after, (void *)rx_ptr);
+#else
         // universal.js protocol: x16 = command (1 = prepare JIT region),
         // x0 = region address, x1 = length
         __asm__ volatile (
@@ -333,6 +385,7 @@ static bool init_txm_jit_pool()
             :: "r" (rx_ptr), "r" (size)
             : "x0", "x1", "x16", "memory"
         );
+#endif
     }
 
     vm_address_t rw_region = 0;
@@ -340,6 +393,7 @@ static bool init_txm_jit_pool()
     vm_prot_t cur_protection = 0;
     vm_prot_t max_protection = 0;
 
+    DIAG_STEP(VMEM, "TXM: vm_remap RX %p -> RW", (void *)rx_ptr);
     kern_return_t retval = vm_remap(
         mach_task_self(), &rw_region, size, 0,
         VM_FLAGS_ANYWHERE, mach_task_self(), target, FALSE,
@@ -356,6 +410,7 @@ static bool init_txm_jit_pool()
     }
 
     u8* rw_ptr = reinterpret_cast<u8*>(rw_region);
+    DIAG_STEP(VMEM, "TXM: vm_remap ok, RW region %p, mprotect RW", (void *)rw_ptr);
 
     if (mprotect(rw_ptr, size, PROT_READ | PROT_WRITE) != 0)
     {
@@ -366,6 +421,7 @@ static bool init_txm_jit_pool()
         return false;
     }
 
+    DIAG_STEP(VMEM, "TXM: mprotect ok, lwmem_assignmem");
     lwmem_region_t regions[] = {
         { (void*)rw_ptr, size },
         { NULL, 0 }
@@ -392,7 +448,9 @@ static bool init_txm_jit_pool()
 
     if (has_txm) {
         // universal.js: x16 = 0 -> detach the debugger now that the region is prepared
+        DIAG_STEP(VMEM, "TXM: executing brk #0xf00d, x16=0 (detach)");
         __asm__ volatile ("mov x16, #0\n" "brk #0xf00d" ::: "x16", "memory");
+        DIAG_STEP(VMEM, "TXM: detach brk returned");
     }
 
     return true;

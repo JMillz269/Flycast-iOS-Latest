@@ -410,10 +410,13 @@ bool Drawer::Draw(const Texture *fogTexture, const Texture *paletteTexture)
 
 void TextureDrawer::Init(SamplerManager *samplerManager, ShaderManager *shaderManager, TextureCache *textureCache)
 {
+	DIAG_STEP(RENDERER, "TextureDrawer::Init: rttPipelineManager.Init");
 	if (!rttPipelineManager)
 		rttPipelineManager = std::make_unique<RttPipelineManager>();
 	rttPipelineManager->Init(shaderManager);
+	DIAG_STEP(RENDERER, "TextureDrawer::Init: Drawer::Init");
 	Drawer::Init(samplerManager, rttPipelineManager.get());
+	DIAG_STEP(RENDERER, "TextureDrawer::Init: done");
 
 	this->textureCache = textureCache;
 }
@@ -578,6 +581,8 @@ void TextureDrawer::EndRenderPass()
 
 void ScreenDrawer::Init(SamplerManager *samplerManager, ShaderManager *shaderManager, const vk::Extent2D& viewport)
 {
+	DIAG_STEP(RENDERER, "ScreenDrawer::Init: viewport %u x %u (previous %u x %u)", viewport.width, viewport.height,
+			this->viewport.width, this->viewport.height);
 	emulateFramebuffer = config::EmulateFramebuffer;
 	this->shaderManager = shaderManager;
 	if (this->viewport != viewport)
@@ -596,6 +601,7 @@ void ScreenDrawer::Init(SamplerManager *samplerManager, ShaderManager *shaderMan
 	this->viewport = viewport;
 	if (!depthAttachment)
 	{
+		DIAG_STEP(RENDERER, "ScreenDrawer::Init: creating depth attachment (%s)", vk::to_string(GetContext()->GetDepthFormat()).c_str());
 		depthAttachment = std::make_unique<FramebufferAttachment>(
 				GetContext()->GetPhysicalDevice(), GetContext()->GetDevice());
 		depthAttachment->Init(viewport.width, viewport.height, GetContext()->GetDepthFormat(),
@@ -605,6 +611,7 @@ void ScreenDrawer::Init(SamplerManager *samplerManager, ShaderManager *shaderMan
 
 	if (!renderPassLoad)
 	{
+		DIAG_STEP(RENDERER, "ScreenDrawer::Init: creating render passes");
 		std::array<vk::AttachmentDescription, 2> attachmentDescriptions = {
 				// Color attachment
 				vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), vk::Format::eR8G8B8A8Unorm, vk::SampleCountFlagBits::e1,
@@ -642,6 +649,7 @@ void ScreenDrawer::Init(SamplerManager *samplerManager, ShaderManager *shaderMan
 				dependency));
 	}
 	size_t size = GetSwapChainSize();
+	DIAG_STEP(RENDERER, "ScreenDrawer::Init: %d color attachments wanted, %d existing", (int)size, (int)colorAttachments.size());
 	if (colorAttachments.size() > size)
 	{
 		colorAttachments.resize(size);
@@ -657,6 +665,7 @@ void ScreenDrawer::Init(SamplerManager *samplerManager, ShaderManager *shaderMan
 		};
 		while (colorAttachments.size() < size)
 		{
+			DIAG_STEP(RENDERER, "ScreenDrawer::Init: creating color attachment %d", (int)colorAttachments.size());
 			colorAttachments.push_back(std::make_unique<FramebufferAttachment>(
 					GetContext()->GetPhysicalDevice(), GetContext()->GetDevice()));
 			vk::ImageUsageFlags usage = vk::ImageUsageFlagBits::eColorAttachment;
@@ -667,6 +676,7 @@ void ScreenDrawer::Init(SamplerManager *samplerManager, ShaderManager *shaderMan
 			colorAttachments.back()->Init(viewport.width, viewport.height, vk::Format::eR8G8B8A8Unorm, usage,
 					"COLOR ATTACHMENT " + std::to_string(colorAttachments.size() - 1));
 			attachments[0] = colorAttachments.back()->GetImageView();
+			DIAG_STEP(RENDERER, "ScreenDrawer::Init: creating framebuffer %d", (int)framebuffers.size());
 			vk::FramebufferCreateInfo createInfo(vk::FramebufferCreateFlags(), *renderPassLoad,
 					attachments, viewport.width, viewport.height, 1);
 			framebuffers.push_back(GetContext()->GetDevice().createFramebufferUnique(createInfo));
@@ -676,10 +686,13 @@ void ScreenDrawer::Init(SamplerManager *samplerManager, ShaderManager *shaderMan
 	}
 	frameRendered = false;
 
+	DIAG_STEP(RENDERER, "ScreenDrawer::Init: screenPipelineManager.Init");
 	if (!screenPipelineManager)
 		screenPipelineManager = std::make_unique<PipelineManager>();
 	screenPipelineManager->Init(shaderManager, *renderPassLoad);
+	DIAG_STEP(RENDERER, "ScreenDrawer::Init: Drawer::Init");
 	Drawer::Init(samplerManager, screenPipelineManager.get());
+	DIAG_STEP(RENDERER, "ScreenDrawer::Init: done");
 }
 
 vk::CommandBuffer ScreenDrawer::BeginRenderPass()

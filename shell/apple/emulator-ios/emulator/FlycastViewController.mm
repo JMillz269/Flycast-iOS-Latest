@@ -39,6 +39,7 @@
 #include "ui/imgui_driver.h"
 #include "emulator.h"
 #include "log/LogManager.h"
+#include "log/CrashDiag.h"
 #include "stdclass.h"
 #include "cfg/option.h"
 #include "ios_gamepad.h"
@@ -205,6 +206,28 @@ static void updateAudioSession(Event event, void *)
 {
     [super viewDidLoad];
 
+#ifdef FLYCAST_DIAG
+	// Diagnostic build: data dir must be known before the logger opens flycast.log, and the previous
+	// run's log is kept as flycast.prev.log
+	std::string homedir = [[[[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] objectAtIndex:0] path] UTF8String];
+	homedir += "/";
+	set_user_config_dir(homedir);
+	set_user_data_dir(homedir);
+	rename((homedir + "flycast.log").c_str(), (homedir + "flycast.prev.log").c_str());
+	// MoltenVK reads these when the Vulkan instance is created
+	setenv("MVK_CONFIG_LOG_LEVEL", "4", 1);				// errors, warnings, info and debug
+	setenv("MVK_CONFIG_TRACE_VULKAN_CALLS", "1", 1);	// log every Vulkan call: the last one before a crash is the culprit
+	setenv("MVK_CONFIG_DEBUG", "1", 1);
+	LogManager::Init();
+	crashdiag_install(homedir.c_str());
+	NSLog(@"Flycast diagnostic build: logs in %s (flycast.log, flycast-crash.txt, mvk-stderr.log)", homedir.c_str());
+	NSSetUncaughtExceptionHandler([](NSException *e) {
+		NOTICE_LOG(COMMON, "Uncaught NSException %s: %s", e.name.UTF8String, e.reason.UTF8String);
+		for (NSString *sym in e.callStackSymbols)
+			NOTICE_LOG(COMMON, "  %s", sym.UTF8String);
+	});
+	i18n::init();
+#else
 	LogManager::Init();
 	i18n::init();
 
@@ -212,6 +235,7 @@ static void updateAudioSession(Event event, void *)
 	homedir += "/";
 	set_user_config_dir(homedir);
 	set_user_data_dir(homedir);
+#endif
 
 	const std::string biosDir = homedir + "BIOS/";
 	const std::string romsDir = homedir + "ROMS/";

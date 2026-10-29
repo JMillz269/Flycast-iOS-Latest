@@ -9,6 +9,8 @@ if(NOT LIBRETRO)
             ConsoleListenerDroid.cpp
             ConsoleListenerNix.cpp
             ConsoleListenerWin.cpp
+            CrashDiag.cpp
+            CrashDiag.h
             LogManager.cpp
             LogManager.h)
 endif()

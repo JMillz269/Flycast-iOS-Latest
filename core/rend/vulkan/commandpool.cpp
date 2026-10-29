@@ -21,6 +21,7 @@
 
 void CommandPool::Init(size_t chainSize)
 {
+	DIAG_STEP(RENDERER, "CommandPool::Init chainSize %d", (int)chainSize);
 	this->chainSize = chainSize;
 	device = VulkanContext::Instance()->GetDevice();
 	if (commandPools.size() > chainSize)

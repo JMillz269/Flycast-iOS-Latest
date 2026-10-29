@@ -121,7 +121,11 @@ LogManager::LogManager()
 	m_log[LogTypes::SH4] = {"SH4", "SH4 Modules"};
 
 	// Set up log listeners
+#ifdef FLYCAST_DIAG
+	int verbosity = LogTypes::LDEBUG;
+#else
 	int verbosity = config::loadInt("log", "Verbosity", LogTypes::LDEBUG);
+#endif
 
 	// Ensure the verbosity level is valid
 	if (verbosity < 1)
@@ -145,7 +149,12 @@ LogManager::LogManager()
 
 void LogManager::UpdateConfig()
 {
+#ifdef FLYCAST_DIAG
+	// diagnostic builds always log to <data dir>/flycast.log
+	bool logToFile = true;
+#else
 	bool logToFile = config::loadBool("log", "LogToFile", false);
+#endif
 	if (logToFile != IsListenerEnabled(LogListener::FILE_LISTENER))
 	{
 		if (!logToFile) {

@@ -180,6 +180,7 @@ public:
 	{
 		this->shaderManager = shaderManager;
 
+		DIAG_STEP(RENDERER, "PipelineManager::Init: layouts %d, renderPass changed %d", (int)(perFrameLayout ? 1 : 0), (int)(this->renderPass != renderPass));
 		if (!perFrameLayout)
 		{
 			// Descriptor set and pipeline layout
@@ -209,6 +210,7 @@ public:
 			this->renderPass = renderPass;
 			Reset();
 		}
+		DIAG_STEP(RENDERER, "PipelineManager::Init: done");
 	}
 
 	vk::Pipeline GetPipeline(u32 listType, bool sortTriangles, const PolyParam& pp, int gpuPalette, bool dithering)
@@ -357,6 +359,7 @@ public:
 	void Init(ShaderManager *shaderManager)
 	{
 		// RTT render pass
+		DIAG_STEP(RENDERER, "RttPipelineManager::Init: creating RTT render pass (RenderToTextureBuffer %d)", (int)config::RenderToTextureBuffer);
 		renderToTextureBuffer = config::RenderToTextureBuffer;
 	    vk::AttachmentDescription attachmentDescriptions[] = {
 	    		vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), vk::Format::eR8G8B8A8Unorm, vk::SampleCountFlagBits::e1,

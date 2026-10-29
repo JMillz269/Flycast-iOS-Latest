@@ -1,4 +1,5 @@
 #include "Renderer_if.h"
+#include "log/CrashDiag.h"
 #include "spg.h"
 #include "rend/texconv.h"
 #include "rend/transform_matrix.h"
@@ -462,9 +463,12 @@ static void rend_create_renderer()
 bool rend_init_renderer()
 {
 	rendererEnabled = true;
+	DIAG_STEP(RENDERER, "rend_init_renderer: RendererType %d, renderer %s", (int)config::RendererType.get(), renderer == nullptr ? "to be created" : "already exists");
 	if (renderer == nullptr)
 		rend_create_renderer();
+	DIAG_STEP(RENDERER, "rend_init_renderer: calling renderer->Init() (renderer %p)", (void *)renderer);
 	bool success = renderer != nullptr && renderer->Init();
+	DIAG_STEP(RENDERER, "rend_init_renderer: renderer->Init() returned %d", (int)success);
 	if (!success) {
 		delete renderer;
 		renderer = rend_norend();

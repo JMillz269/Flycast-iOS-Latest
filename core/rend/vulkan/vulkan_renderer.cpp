@@ -26,12 +26,17 @@
 
 bool BaseVulkanRenderer::BaseInit(vk::RenderPass renderPass, int subpass)
 {
+	DIAG_STEP(RENDERER, "BaseInit: texCommandPool.Init");
 	texCommandPool.Init();
+	DIAG_STEP(RENDERER, "BaseInit: fbCommandPool.Init");
 	fbCommandPool.Init();
+	DIAG_STEP(RENDERER, "BaseInit: quadPipeline.Init");
 	quadPipeline = std::make_unique<QuadPipeline>(false, false);
 	quadPipeline->Init(&shaderManager, renderPass, subpass);
+	DIAG_STEP(RENDERER, "BaseInit: framebufferDrawer.Init");
 	framebufferDrawer = std::make_unique<QuadDrawer>();
 	framebufferDrawer->Init(quadPipeline.get());
+	DIAG_STEP(RENDERER, "BaseInit: done");
 
 	return true;
 }
@@ -245,19 +250,31 @@ public:
 	{
 		NOTICE_LOG(RENDERER, "VulkanRenderer::Init");
 		try {
+			DIAG_STEP(RENDERER, "VulkanRenderer::Init: viewport %u x %u, EmulateFramebuffer %d, swapchain size %d",
+					viewport.width, viewport.height, (int)config::EmulateFramebuffer, (int)GetContext()->GetSwapChainSize());
+			DIAG_STEP(RENDERER, "VulkanRenderer::Init: textureDrawer.Init");
 			textureDrawer.Init(&samplerManager, &shaderManager, &textureCache);
 			textureDrawer.SetCommandPool(&texCommandPool);
 
+			DIAG_STEP(RENDERER, "VulkanRenderer::Init: screenDrawer.Init");
 			screenDrawer.Init(&samplerManager, &shaderManager, viewport);
 			screenDrawer.SetCommandPool(&texCommandPool);
+			DIAG_STEP(RENDERER, "VulkanRenderer::Init: BaseInit");
 			BaseInit(screenDrawer.GetRenderPass());
 			emulateFramebuffer = config::EmulateFramebuffer;
+			DIAG_STEP(RENDERER, "VulkanRenderer::Init: done");
 
 			return true;
 		} catch (const vk::SystemError& e) {
 			ERROR_LOG(RENDERER, "Vulkan system error %s", e.what());
 			return false;
 		}
+#ifdef FLYCAST_DIAG
+		catch (const std::exception& e) {
+			ERROR_LOG(RENDERER, "VulkanRenderer::Init: exception %s", e.what());
+			throw;
+		}
+#endif
 	}
 
 	void Term() override

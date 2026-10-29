@@ -63,6 +63,7 @@ vk::PipelineVertexInputStateCreateInfo GetQuadInputStateCreateInfo(bool uv)
 
 void QuadPipeline::CreatePipeline()
 {
+	DIAG_STEP(RENDERER, "QuadPipeline::CreatePipeline (rotate %d, ignoreTexAlpha %d)", (int)rotate, (int)ignoreTexAlpha);
 	vk::PipelineVertexInputStateCreateInfo pipelineVertexInputStateCreateInfo = GetQuadInputStateCreateInfo(true);
 
 	// Input assembly state
@@ -126,11 +127,14 @@ void QuadPipeline::CreatePipeline()
 	  subpass                                     // subpass
 	);
 
+	DIAG_STEP(RENDERER, "QuadPipeline::CreatePipeline: createGraphicsPipeline");
 	pipeline = GetContext()->GetDevice().createGraphicsPipelineUnique(GetContext()->GetPipelineCache(), graphicsPipelineCreateInfo).value;
+	DIAG_STEP(RENDERER, "QuadPipeline::CreatePipeline: done");
 }
 
 void QuadPipeline::Init(ShaderManager *shaderManager, vk::RenderPass renderPass, int subpass)
 {
+	DIAG_STEP(RENDERER, "QuadPipeline::Init (layout %d, samplers %d/%d)", (int)(pipelineLayout ? 1 : 0), (int)(linearSampler ? 1 : 0), (int)(nearestSampler ? 1 : 0));
 	this->shaderManager = shaderManager;
 	if (!pipelineLayout)
 	{
@@ -175,6 +179,7 @@ void QuadPipeline::Init(ShaderManager *shaderManager, vk::RenderPass renderPass,
 
 void QuadDrawer::Init(QuadPipeline *pipeline)
 {
+	DIAG_STEP(RENDERER, "QuadDrawer::Init");
 	this->pipeline = pipeline;
 	buffer = std::make_unique<QuadBuffer>();
 	descriptorSets.resize(VulkanContext::Instance()->GetSwapChainSize());

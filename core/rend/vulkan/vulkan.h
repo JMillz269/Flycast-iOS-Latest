@@ -20,6 +20,7 @@
 */
 #pragma once
 #include "types.h"
+#include "log/CrashDiag.h"
 
 #include <vulkan/vulkan.hpp>
 

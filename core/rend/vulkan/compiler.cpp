@@ -106,10 +106,14 @@ static bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, std::string cons
 
 vk::UniqueShaderModule ShaderCompiler::Compile(vk::ShaderStageFlagBits shaderStage, std::string const& shaderText)
 {
+	DIAG_STEP(RENDERER, "ShaderCompiler::Compile: %s shader, %d chars of GLSL", vk::to_string(shaderStage).c_str(), (int)shaderText.size());
 	std::vector<unsigned int> shaderSPV;
 	bool ok = GLSLtoSPV(shaderStage, shaderText, shaderSPV);
+	DIAG_STEP(RENDERER, "ShaderCompiler::Compile: GLSL -> SPIR-V %s, %d words", ok ? "ok" : "FAILED", (int)shaderSPV.size());
 	verify(ok);
 
-	return VulkanContext::Instance()->GetDevice().createShaderModuleUnique
+	vk::UniqueShaderModule module = VulkanContext::Instance()->GetDevice().createShaderModuleUnique
 			(vk::ShaderModuleCreateInfo(vk::ShaderModuleCreateFlags(), shaderSPV));
+	DIAG_STEP(RENDERER, "ShaderCompiler::Compile: shader module created");
+	return module;
 }

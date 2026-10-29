@@ -437,6 +437,8 @@ void Texture::deferDeleteResource(FlightManager *manager)
 
 void FramebufferAttachment::Init(u32 width, u32 height, vk::Format format, const vk::ImageUsageFlags& usage, const std::string& name)
 {
+	DIAG_STEP(RENDERER, "FramebufferAttachment::Init '%s': %u x %u format %s usage %s", name.c_str(), width, height,
+			vk::to_string(format).c_str(), vk::to_string(usage).c_str());
 	this->format = format;
 	this->extent = vk::Extent2D { width, height };
 	bool depth = format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint || format == vk::Format::eD16UnormS8Uint;
@@ -450,6 +452,7 @@ void FramebufferAttachment::Init(u32 width, u32 height, vk::Format format, const
 	vk::ImageCreateInfo imageCreateInfo(vk::ImageCreateFlags(), vk::ImageType::e2D, format, vk::Extent3D(extent, 1), 1, 1, vk::SampleCountFlagBits::e1,
 			vk::ImageTiling::eOptimal, usage,
 			vk::SharingMode::eExclusive, nullptr, vk::ImageLayout::eUndefined);
+	DIAG_STEP(RENDERER, "FramebufferAttachment::Init '%s': createImage", name.c_str());
 	image = device.createImageUnique(imageCreateInfo);
 #ifdef VK_DEBUG
 	if (!name.empty())
@@ -459,13 +462,17 @@ void FramebufferAttachment::Init(u32 width, u32 height, vk::Format format, const
 	VmaAllocationCreateInfo allocCreateInfo = { VmaAllocationCreateFlags(), VmaMemoryUsage::VMA_MEMORY_USAGE_GPU_ONLY };
 	if (usage & vk::ImageUsageFlagBits::eTransientAttachment)
 		allocCreateInfo.preferredFlags = VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
+	DIAG_STEP(RENDERER, "FramebufferAttachment::Init '%s': AllocateForImage", name.c_str());
 	allocation = VulkanContext::Instance()->GetAllocator().AllocateForImage(*image, allocCreateInfo);
+	DIAG_STEP(RENDERER, "FramebufferAttachment::Init '%s': image memory bound", name.c_str());
 
 	if ((usage & vk::ImageUsageFlagBits::eColorAttachment) || (usage & vk::ImageUsageFlagBits::eDepthStencilAttachment))
 	{
 		vk::ImageViewCreateInfo imageViewCreateInfo(vk::ImageViewCreateFlags(), image.get(), vk::ImageViewType::e2D,
 				format, vk::ComponentMapping(),	vk::ImageSubresourceRange(depth ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
+		DIAG_STEP(RENDERER, "FramebufferAttachment::Init '%s': createImageView", name.c_str());
 		imageView = device.createImageViewUnique(imageViewCreateInfo);
+		DIAG_STEP(RENDERER, "FramebufferAttachment::Init '%s': done", name.c_str());
 #ifdef VK_DEBUG
 		if (!name.empty())
 			VulkanContext::Instance()->setObjectName(imageView.get(), name);

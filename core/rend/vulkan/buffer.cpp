@@ -25,6 +25,7 @@ BufferData::BufferData(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::Memo
 	: bufferSize(size), m_usage(usage)
 {
 	VulkanContext *context = VulkanContext::Instance();
+	DIAG_LOG(RENDERER, "BufferData: %" PRIu64 " bytes, usage %s, properties %s", (u64)size, vk::to_string(usage).c_str(), vk::to_string(propertyFlags).c_str());
 	buffer = context->GetDevice().createBufferUnique(vk::BufferCreateInfo(vk::BufferCreateFlags(), size, usage));
 	VmaAllocationCreateInfo allocInfo {};
 	if (propertyFlags & vk::MemoryPropertyFlagBits::eDeviceLocal)

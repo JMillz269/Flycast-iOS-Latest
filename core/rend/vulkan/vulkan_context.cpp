@@ -149,10 +149,44 @@ static PFN_vkGetInstanceProcAddr getStaticVkGetInstanceProcAddr() {
 }
 #endif
 
+#ifdef FLYCAST_DIAG
+static void dumpPhysicalDeviceInfo(vk::PhysicalDevice physicalDevice)
+{
+	const vk::PhysicalDeviceProperties props = physicalDevice.getProperties();
+	DIAG_LOG(RENDERER, "[diag] device '%s' type %s vendor 0x%x device 0x%x apiVersion %u.%u.%u driverVersion 0x%x",
+			props.deviceName.data(), vk::to_string(props.deviceType).c_str(), props.vendorID, props.deviceID,
+			VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion), VK_API_VERSION_PATCH(props.apiVersion), props.driverVersion);
+	const vk::PhysicalDeviceLimits& l = props.limits;
+	DIAG_LOG(RENDERER, "[diag] limits: maxImageDimension2D %u maxFramebuffer %u x %u maxUniformBufferRange %u maxStorageBufferRange %u "
+			"maxBoundDescriptorSets %u maxPerStageDescriptorSamplers %u maxPushConstantsSize %u maxMemoryAllocationCount %u",
+			l.maxImageDimension2D, l.maxFramebufferWidth, l.maxFramebufferHeight, l.maxUniformBufferRange, l.maxStorageBufferRange,
+			l.maxBoundDescriptorSets, l.maxPerStageDescriptorSamplers, l.maxPushConstantsSize, l.maxMemoryAllocationCount);
+	DIAG_LOG(RENDERER, "[diag] limits: minUniformBufferOffsetAlignment %" PRIu64 " minStorageBufferOffsetAlignment %" PRIu64 " nonCoherentAtomSize %" PRIu64
+			" maxSamplerAnisotropy %.1f", (u64)l.minUniformBufferOffsetAlignment, (u64)l.minStorageBufferOffsetAlignment,
+			(u64)l.nonCoherentAtomSize, l.maxSamplerAnisotropy);
+	const vk::PhysicalDeviceMemoryProperties mem = physicalDevice.getMemoryProperties();
+	for (u32 i = 0; i < mem.memoryHeapCount; i++)
+		DIAG_LOG(RENDERER, "[diag] memory heap %u: %" PRIu64 " MB, %s", i, (u64)(mem.memoryHeaps[i].size >> 20), vk::to_string(mem.memoryHeaps[i].flags).c_str());
+	for (u32 i = 0; i < mem.memoryTypeCount; i++)
+		DIAG_LOG(RENDERER, "[diag] memory type %u: heap %u, %s", i, mem.memoryTypes[i].heapIndex, vk::to_string(mem.memoryTypes[i].propertyFlags).c_str());
+	const vk::PhysicalDeviceFeatures f = physicalDevice.getFeatures();
+	DIAG_LOG(RENDERER, "[diag] features: samplerAnisotropy %d fragmentStoresAndAtomics %d independentBlend %d geometryShader %d depthClamp %d",
+			(int)f.samplerAnisotropy, (int)f.fragmentStoresAndAtomics, (int)f.independentBlend, (int)f.geometryShader, (int)f.depthClamp);
+	for (vk::Format fmt : { vk::Format::eR8G8B8A8Unorm, vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint, vk::Format::eD16UnormS8Uint })
+	{
+		const vk::FormatProperties fp = physicalDevice.getFormatProperties(fmt);
+		DIAG_LOG(RENDERER, "[diag] format %s optimalTilingFeatures: %s", vk::to_string(fmt).c_str(), vk::to_string(fp.optimalTilingFeatures).c_str());
+	}
+	for (const auto& ext : physicalDevice.enumerateDeviceExtensionProperties())
+		DIAG_LOG(RENDERER, "[diag] device extension available: %s (spec %u)", ext.extensionName.data(), ext.specVersion);
+}
+#endif
+
 bool VulkanContext::InitInstance(const char** extensions, uint32_t extensions_count)
 {
 	try
 	{
+		DIAG_STEP(RENDERER, "VulkanContext::InitInstance (%u extensions)", extensions_count);
 #if VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1
 		PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = nullptr;
 #if defined(__ANDROID__) && HOST_CPU == CPU_ARM64
@@ -231,8 +265,12 @@ bool VulkanContext::InitInstance(const char** extensions, uint32_t extensions_co
 		}
 #endif
 		vk::InstanceCreateInfo instanceCreateInfo(instanceFlags, &applicationInfo, layer_names, vext);
+		for (const char *ext : vext)
+			DIAG_LOG(RENDERER, "[diag] instance extension requested: %s", ext);
+		DIAG_STEP(RENDERER, "VulkanContext::InitInstance: vkCreateInstance");
 		// create a UniqueInstance
 		instance = vk::createInstanceUnique(instanceCreateInfo);
+		DIAG_STEP(RENDERER, "VulkanContext::InitInstance: instance created");
 
 #if VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1
 		VULKAN_HPP_DEFAULT_DISPATCHER.init(*instance);
@@ -315,6 +353,9 @@ bool VulkanContext::InitInstance(const char** extensions, uint32_t extensions_co
 		maxSamplerAnisotropy =  properties.limits.maxSamplerAnisotropy;
 		vendorID = properties.vendorID;
 		NOTICE_LOG(RENDERER, "Vulkan API %s. Device %s", vulkan11 ? "1.1" : "1.0", properties.deviceName.data());
+#ifdef FLYCAST_DIAG
+		dumpPhysicalDeviceInfo(physicalDevice);
+#endif
 
 		vk::FormatProperties formatProperties = physicalDevice.getFormatProperties(vk::Format::eR5G5B5A1UnormPack16);
 		if ((formatProperties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImage)
@@ -398,6 +439,7 @@ bool VulkanContext::InitDevice()
 		return false;
 	try
 	{
+		DIAG_STEP(RENDERER, "VulkanContext::InitDevice");
 		const vk::PhysicalDeviceProperties physicalDeviceProperties = physicalDevice.getProperties();
 
 		std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
@@ -575,6 +617,8 @@ bool VulkanContext::InitDevice()
 		float queuePriority = 1.0f;
 		vk::DeviceQueueCreateInfo deviceQueueCreateInfo(vk::DeviceQueueCreateFlags(), graphicsQueueIndex, 1, &queuePriority);
 
+		DIAG_STEP(RENDERER, "VulkanContext::InitDevice: vkCreateDevice (%d extensions, graphics queue %u, present queue %u, props2 %d)",
+				(int)enabledExtensions.size(), graphicsQueueIndex, presentQueueIndex, (int)getPhysicalDeviceProperties2Supported);
 		if (getPhysicalDeviceProperties2Supported)
 		{
 			vk::DeviceCreateInfo deviceCreateInfo(vk::DeviceCreateFlags(), deviceQueueCreateInfo,
@@ -591,6 +635,7 @@ bool VulkanContext::InitDevice()
 #if VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1
 		VULKAN_HPP_DEFAULT_DISPATCHER.init(*device);
 #endif
+		DIAG_STEP(RENDERER, "VulkanContext::InitDevice: device created");
 
 	    // Queues
 	    graphicsQueue = device->getQueue(graphicsQueueIndex, 0);
@@ -615,6 +660,7 @@ bool VulkanContext::InitDevice()
 	    descriptorPool = device->createDescriptorPoolUnique(vk::DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
 	    		40000, pool_sizes));
 
+	    DIAG_STEP(RENDERER, "VulkanContext::InitDevice: descriptor pool created, loading pipeline cache");
 	    constexpr const char *PipelineSection = "validate";
 	    constexpr const char *PipelineKey = "vkPipelineCache";
 
@@ -650,7 +696,9 @@ bool VulkanContext::InitDevice()
     		delete [] cacheData;
     		config::saveBool(PipelineSection, PipelineKey, false);
 	    }
+	    DIAG_STEP(RENDERER, "VulkanContext::InitDevice: pipeline cache ready, creating VMA allocator");
 	    allocator.Init(physicalDevice, *device, *instance);
+	    DIAG_STEP(RENDERER, "VulkanContext::InitDevice: VMA allocator ready");
 
 	    shaderManager = std::make_unique<ShaderManager>();
 	    quadPipeline = std::make_unique<QuadPipeline>(true, false);
@@ -675,7 +723,9 @@ bool VulkanContext::InitDevice()
 				+ std::to_string(VK_API_VERSION_PATCH(props.driverVersion));
 #endif
 
+		DIAG_STEP(RENDERER, "VulkanContext::InitDevice: CreateSwapChain");
 		CreateSwapChain();
+		DIAG_STEP(RENDERER, "VulkanContext::InitDevice: done");
 
 		return true;
 	}
@@ -697,6 +747,7 @@ void VulkanContext::CreateSwapChain()
 {
 	try
 	{
+		DIAG_STEP(RENDERER, "VulkanContext::CreateSwapChain");
 		device->waitIdle();
 
 		if (!drawFences.empty())
@@ -741,6 +792,9 @@ void VulkanContext::CreateSwapChain()
 		// Top of the list is the best candidate surface format/color-space
 		const vk::SurfaceFormatKHR& targetSurfaceFormat = surfaceFormats[0];
 		presentFormat = targetSurfaceFormat.format;
+		for (const auto& sf : surfaceFormats)
+			DIAG_LOG(RENDERER, "[diag] surface format %s colorSpace %s", vk::to_string(sf.format).c_str(), vk::to_string(sf.colorSpace).c_str());
+		DIAG_LOG(RENDERER, "[diag] selected present format %s", vk::to_string(presentFormat).c_str());
 
 		int tries = 0;
 		do {
@@ -832,8 +886,11 @@ void VulkanContext::CreateSwapChain()
 
 			swappyvk::detachSwapchain();
 			swapChain.reset();
+			DIAG_STEP(RENDERER, "VulkanContext::CreateSwapChain: vkCreateSwapchainKHR %u x %u, %u images, present mode %s, preTransform %s",
+					swapchainExtent.width, swapchainExtent.height, imageCount, vk::to_string(swapchainPresentMode).c_str(), vk::to_string(preTransform).c_str());
 			try {
 				swapChain = device->createSwapchainKHRUnique(swapChainCreateInfo);
+				DIAG_STEP(RENDERER, "VulkanContext::CreateSwapChain: swapchain created");
 			}
 			catch (const vk::SystemError& err)
 			{
@@ -866,6 +923,7 @@ void VulkanContext::CreateSwapChain()
 		    commandBuffers.push_back(std::move(device->allocateCommandBuffersUnique(vk::CommandBufferAllocateInfo(*commandPools.back(), vk::CommandBufferLevel::ePrimary, 1)).front()));
 		}
 
+		DIAG_STEP(RENDERER, "VulkanContext::CreateSwapChain: %d images, views and command pools created", (int)swapChainImages.size());
 	    depthFormat = findDepthFormat(physicalDevice);
 		if (depthFormat == vk::Format::eUndefined) {
 			SetWindowSize(0, 0);
@@ -903,17 +961,22 @@ void VulkanContext::CreateSwapChain()
 	    }
 	    inFlightObjects.resize(imageViews.size());
 	    currentSemaphore = 0;
+	    DIAG_STEP(RENDERER, "VulkanContext::CreateSwapChain: framebuffers/fences/semaphores created, initializing quad pipelines");
 	    quadPipeline->Init(shaderManager.get(), *renderPass, 0);
 	    quadPipelineWithAlpha->Init(shaderManager.get(), *renderPass, 0);
 	    quadDrawer->Init(quadPipeline.get());
 	    quadRotatePipeline->Init(shaderManager.get(), *renderPass, 0);
 	    quadRotateDrawer->Init(quadRotatePipeline.get());
+	    DIAG_STEP(RENDERER, "VulkanContext::CreateSwapChain: overlay->Init");
 	    overlay->Init(quadPipelineWithAlpha.get());
 
+	    DIAG_STEP(RENDERER, "VulkanContext::CreateSwapChain: InitImgui");
 	    InitImgui();
 
 	    currentImage = GetSwapChainSize() - 1;
+	    DIAG_STEP(RENDERER, "VulkanContext::CreateSwapChain: ReInitOSD");
 	    ReInitOSD();
+	    DIAG_STEP(RENDERER, "VulkanContext::CreateSwapChain: done");
 
 	    INFO_LOG(RENDERER, "Vulkan swap chain created: %d x %d, swap chain size %d", width, height, (int)imageViews.size());
 	}

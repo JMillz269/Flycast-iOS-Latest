@@ -129,9 +129,14 @@ public:
 	{
 		VmaAllocation vmaAllocation;
 		VmaAllocationInfo allocInfo;
+		DIAG_LOG(RENDERER, "VMA: allocate for image (usage %d, required 0x%x, preferred 0x%x)", (int)allocCreateInfo.usage,
+				(unsigned)allocCreateInfo.requiredFlags, (unsigned)allocCreateInfo.preferredFlags);
 		VkResult rc = vmaAllocateMemoryForImage(allocator, (VkImage)image, &allocCreateInfo, &vmaAllocation, &allocInfo);
+		DIAG_LOG(RENDERER, "VMA: vmaAllocateMemoryForImage -> %d (memoryType %u, size %" PRIu64 ")", (int)rc, allocInfo.memoryType, (u64)allocInfo.size);
 		vk::detail::resultCheck(static_cast<vk::Result>(rc), "vmaAllocateMemoryForImage failed");
-		vmaBindImageMemory(allocator, vmaAllocation, (VkImage)image);
+		VkResult brc = vmaBindImageMemory(allocator, vmaAllocation, (VkImage)image);
+		DIAG_LOG(RENDERER, "VMA: vmaBindImageMemory -> %d", (int)brc);
+		(void)brc;
 
 		return Allocation(allocator, vmaAllocation, allocInfo);
 	}
@@ -140,9 +145,14 @@ public:
 	{
 		VmaAllocation vmaAllocation;
 		VmaAllocationInfo allocInfo;
+		DIAG_LOG(RENDERER, "VMA: allocate for buffer (usage %d, flags 0x%x, required 0x%x, preferred 0x%x)", (int)allocCreateInfo.usage,
+				(unsigned)allocCreateInfo.flags, (unsigned)allocCreateInfo.requiredFlags, (unsigned)allocCreateInfo.preferredFlags);
 		VkResult rc = vmaAllocateMemoryForBuffer(allocator, (VkBuffer)buffer, &allocCreateInfo, &vmaAllocation, &allocInfo);
+		DIAG_LOG(RENDERER, "VMA: vmaAllocateMemoryForBuffer -> %d (memoryType %u, size %" PRIu64 ")", (int)rc, allocInfo.memoryType, (u64)allocInfo.size);
 		vk::detail::resultCheck(static_cast<vk::Result>(rc), "vmaAllocateMemoryForBuffer failed");
-		vmaBindBufferMemory(allocator, vmaAllocation, (VkBuffer)buffer);
+		VkResult brc = vmaBindBufferMemory(allocator, vmaAllocation, (VkBuffer)buffer);
+		DIAG_LOG(RENDERER, "VMA: vmaBindBufferMemory -> %d", (int)brc);
+		(void)brc;
 
 		return Allocation(allocator, vmaAllocation, allocInfo);
 	}

@@ -1,0 +1,97 @@
+name: iOS Debug IPA (diagnostics)
+
+# Debug build with full logging, step-by-step Vulkan init logging, crash reports and MoltenVK call tracing.
+# See docs/ios-debug-build.md for what it writes and how to collect the logs.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'claude/ecstatic-albattani-5yi6g1'
+
+jobs:
+  build-ios-debug:
+    runs-on: macos-15
+    env:
+      BUILD_TYPE: Debug
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      # Prefer Xcode 16.x if the runner has several; otherwise keep the default.
+      - name: Select Xcode
+        run: |
+          X=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -n 1)
+          if [ -n "$X" ]; then sudo xcode-select -switch "$X"; fi
+          xcodebuild -version
+
+      # ldid is required: the CMake IPA step signs the binary with entitlements.
+      - name: Install build tools
+        run: |
+          brew update || true
+          brew install ldid cmake
+
+      - name: Build OpenMP.xcframework
+        run: ./shell/apple/emulator-ios/OpenMP/build_ios_openmp.sh --disableSimulator
+
+      - name: Fetch MoltenVK (iOS static library)
+        id: moltenvk
+        run: |
+          set -e
+          MVK_TAG=v1.4.2
+          mkdir -p mvk && cd mvk
+          for asset in MoltenVK-ios.tar MoltenVK-all.tar; do
+            if curl -fL -o "$asset" "https://github.com/KhronosGroup/MoltenVK/releases/download/${MVK_TAG}/${asset}"; then
+              tar xf "$asset"; break
+            fi
+          done
+          find . -name "*.xcframework" -maxdepth 6
+          LIB=$(find "$PWD" -path "*ios-arm64/*" -name "libMoltenVK.a" | head -n 1)
+          echo "Using: $LIB"
+          test -n "$LIB"
+          echo "lib=$LIB" >> "$GITHUB_OUTPUT"
+
+      # Fresh build dir on purpose: the repo's committed build/ folder is a
+      # generated Xcode project with absolute /Users/... paths.
+      #  - ENABLE_LOG: compiles in INFO/DEBUG log levels (DEBUGFAST)
+      #  - FLYCAST_DIAG: step logging, crash reports, always logs to Documents/flycast.log
+      #  - optimization level 1 + dSYM + no stripping: fast enough to play, but crash backtraces stay readable
+      - name: Configure
+        run: |
+          cmake -B build-ios \
+            -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_XCODE_ATTRIBUTE_GCC_OPTIMIZATION_LEVEL=1 \
+            -DCMAKE_XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT=dwarf-with-dsym \
+            -DCMAKE_XCODE_ATTRIBUTE_COPY_PHASE_STRIP=NO \
+            -DCMAKE_XCODE_ATTRIBUTE_STRIP_INSTALLED_PRODUCT=NO \
+            -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+            -DENABLE_LOG=ON \
+            -DFLYCAST_DIAG=ON \
+            -DMOLTENVK_IOS_LIB=${{ steps.moltenvk.outputs.lib }}
+
+      - name: Build Debug (also produces Flycast.ipa)
+        run: |
+          cmake --build build-ios --config $BUILD_TYPE 2>&1 | tee build.log | tail -n 150
+          exit ${PIPESTATUS[0]}
+        shell: bash
+
+      - name: Locate IPA
+        run: |
+          IPA=$(find build-ios -name "Flycast.ipa" | head -n 1)
+          if [ -z "$IPA" ]; then echo "Flycast.ipa not found"; find build-ios -name "*.app" -o -name "*.ipa"; exit 1; fi
+          mkdir -p artifact
+          cp "$IPA" artifact/Flycast-Debug.ipa
+          DSYM=$(find build-ios -name "*.dSYM" -maxdepth 6 | head -n 1)
+          if [ -n "$DSYM" ]; then (cd "$(dirname "$DSYM")" && zip -qr "$GITHUB_WORKSPACE/artifact/Flycast-Debug.dSYM.zip" "$(basename "$DSYM")"); fi
+          cp build.log artifact/build.log
+          ls -lh artifact
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Flycast-iOS-Debug
+          path: artifact/

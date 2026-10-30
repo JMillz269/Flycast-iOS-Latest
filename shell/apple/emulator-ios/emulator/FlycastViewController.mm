@@ -216,7 +216,9 @@ static void updateAudioSession(Event event, void *)
 	rename((homedir + "flycast.log").c_str(), (homedir + "flycast.prev.log").c_str());
 	// MoltenVK reads these when the Vulkan instance is created
 	setenv("MVK_CONFIG_LOG_LEVEL", "4", 1);				// errors, warnings, info and debug
-	setenv("MVK_CONFIG_TRACE_VULKAN_CALLS", "1", 1);	// log every Vulkan call: the last one before a crash is the culprit
+	// Tracing every Vulkan call is very slow: opt in with the "diagTraceVulkan" user default
+	if ([[NSUserDefaults standardUserDefaults] boolForKey:@"diagTraceVulkan"])
+		setenv("MVK_CONFIG_TRACE_VULKAN_CALLS", "1", 1);
 	setenv("MVK_CONFIG_DEBUG", "1", 1);
 	LogManager::Init();
 	crashdiag_install(homedir.c_str());

@@ -12,8 +12,11 @@ It is `CMAKE_BUILD_TYPE=Debug` with `-DENABLE_LOG=ON -DFLYCAST_DIAG=ON`, optimiz
   The last step line in the log is where a crash happened.
 * A crash handler (`SIGSEGV/SIGBUS/SIGILL/SIGABRT/SIGTRAP/SIGFPE`, `std::terminate`, uncaught `NSException`) writes
   the signal, fault address, registers, the last step reached and a backtrace to `flycast-crash.txt`.
-* MoltenVK logging is raised to debug level and **every Vulkan call is traced** (`MVK_CONFIG_TRACE_VULKAN_CALLS`).
-  Its output (stderr) is copied to `mvk-stderr.log` (and still goes to the normal stderr / LiveContainer log).
+* MoltenVK logging is raised to debug level; its output (stderr) is copied to `mvk-stderr.log` (and still goes to the
+  normal stderr / LiveContainer log). Tracing every Vulkan call is off because it is very slow; set the `diagTraceVulkan`
+  user default to enable it.
+* INFO/DEBUG logging is off for the hot emulation categories (Holly, AICA, SH4, dynarec, GDROM, ...) because the BIOS
+  polls registers hundreds of thousands of times per second. Errors and warnings are always logged.
 
 ## Files to collect
 

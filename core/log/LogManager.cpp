@@ -141,6 +141,14 @@ LogManager::LogManager()
 
 	for (LogContainer& container : m_log)
 		container.m_enable = config::loadBool("log", container.m_short_name, true);
+#ifdef FLYCAST_DIAG
+	// Hot categories (the BIOS polls Holly registers hundreds of thousands of times per second) would make the
+	// emulator unusably slow with INFO/DEBUG logging. Errors and warnings are always logged regardless.
+	for (LogTypes::LOG_TYPE hot : { LogTypes::HOLLY, LogTypes::AICA, LogTypes::AICA_ARM, LogTypes::SH4, LogTypes::DYNAREC,
+			LogTypes::INTERPRETER, LogTypes::MEMORY, LogTypes::PVR, LogTypes::MAPLE, LogTypes::JVS, LogTypes::GDROM,
+			LogTypes::FLASHROM })
+		m_log[hot].m_enable = false;
+#endif
 
 	m_path_cutoff_point = DeterminePathCutOffPoint();
 

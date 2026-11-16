@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <cerrno>
+#include <cstring>
 #include <unistd.h>
 
 #include "hw/mem/addrspace.h"
@@ -294,6 +295,7 @@ static bool init_txm_jit_pool()
 
     NOTICE_LOG(VMEM, "=== iOS 26 JIT Detection ===");
     NOTICE_LOG(VMEM, "Device has TXM: %s", has_txm ? "YES" : "NO");
+    NOTICE_LOG(VMEM, "TXM detection: %s", ios_txm_detection_info());
     NOTICE_LOG(VMEM, "Process debugged: %s", is_debugged ? "YES" : "NO");
 
     if (!is_debugged) {
@@ -308,31 +310,30 @@ static bool init_txm_jit_pool()
 
     NOTICE_LOG(VMEM, "Initializing TXM JIT pool (%zu MB)...", size / (1024 * 1024));
 
-    u8* rx_ptr = static_cast<u8*>(mmap(nullptr, size, PROT_READ | PROT_EXEC,
-                                       MAP_ANON | MAP_PRIVATE, -1, 0));
-    if (rx_ptr == MAP_FAILED)
+    u8* rx_ptr = nullptr;
+
+    if (has_txm)
     {
-        ERROR_LOG(VMEM, "TXM: Failed to allocate RX region: %s", strerror(errno));
-        g_txm_pool.uses_txm = false;
-        return false;
+        // Let the debugger (universal.js, "brk #0xf00d", x16 = 1) allocate and prepare the RX region itself by passing
+        // a NULL address, as MeloCafe does. This avoids handing it an mmap'd address it can't handle (it only deals
+        // with addresses below 2^36) and returns the region it actually prepared in x0.
+        NOTICE_LOG(VMEM, "Registering with TXM via brk #0xf00d (universal.js), debugger allocates the region...");
+        rx_ptr = static_cast<u8*>(ios_txm_prepare_region(nullptr, size));
+        NOTICE_LOG(VMEM, "TXM: debugger returned region %p", (void *)rx_ptr);
+        if (rx_ptr == nullptr)
+            WARN_LOG(VMEM, "TXM: the debugger did not allocate a region, falling back to mmap");
     }
-    // The debugger's "prepare region" step only handles addresses below 2^36 (9 hex digits)
-    if ((uint64_t)rx_ptr + size > 0x1000000000ULL)
-        WARN_LOG(VMEM, "TXM: RX region %p is above 2^36, debugger can't prepare it", rx_ptr);
 
-    NOTICE_LOG(VMEM, "Registering with TXM via brk #0xf00d (universal.js)...");
-
-    if (has_txm) {
-        // universal.js protocol: x16 = command (1 = prepare JIT region),
-        // x0 = region address, x1 = length
-        __asm__ volatile (
-            "mov x0, %0\n"
-            "mov x1, %1\n"
-            "mov x16, #1\n"
-            "brk #0xf00d"
-            :: "r" (rx_ptr), "r" (size)
-            : "x0", "x1", "x16", "memory"
-        );
+    if (rx_ptr == nullptr)
+    {
+        rx_ptr = static_cast<u8*>(mmap(nullptr, size, PROT_READ | PROT_EXEC, MAP_ANON | MAP_PRIVATE, -1, 0));
+        if (rx_ptr == MAP_FAILED)
+        {
+            ERROR_LOG(VMEM, "TXM: Failed to allocate RX region: %s", strerror(errno));
+            g_txm_pool.uses_txm = false;
+            return false;
+        }
+        NOTICE_LOG(VMEM, "TXM: RX region allocated with mmap at %p", (void *)rx_ptr);
     }
 
     vm_address_t rw_region = 0;
@@ -344,7 +345,7 @@ static bool init_txm_jit_pool()
         mach_task_self(), &rw_region, size, 0,
         VM_FLAGS_ANYWHERE, mach_task_self(), target, FALSE,
         &cur_protection, &max_protection,
-        VM_INHERIT_DEFAULT
+        VM_INHERIT_NONE
     );
 
     if (retval != KERN_SUCCESS)
@@ -392,7 +393,7 @@ static bool init_txm_jit_pool()
 
     if (has_txm) {
         // universal.js: x16 = 0 -> detach the debugger now that the region is prepared
-        __asm__ volatile ("mov x16, #0\n" "brk #0xf00d" ::: "x16", "memory");
+        ios_txm_detach();
     }
 
     return true;

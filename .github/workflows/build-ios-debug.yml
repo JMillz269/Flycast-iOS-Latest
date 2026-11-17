@@ -22,12 +22,21 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      # Prefer Xcode 16.x if the runner has several; otherwise keep the default.
+      # Apps built with the iOS 27 SDK must adopt the UIScene lifecycle or UIKit traps at launch
+      # (EXC_BREAKPOINT in __UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption), which Flycast doesn't do yet.
+      # Prefer Xcode 16.x, then 26.x, never fall back to an unknown default, and refuse an SDK >= 27.
       - name: Select Xcode
         run: |
           X=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$X" ]; then X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1); fi
           if [ -n "$X" ]; then sudo xcode-select -switch "$X"; fi
           xcodebuild -version
+          SDK=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "iPhoneOS SDK: $SDK"
+          if [ "${SDK%%.*}" -ge 27 ]; then
+            echo "::error::iPhoneOS SDK $SDK requires the UIScene lifecycle; the app would fail to launch. Install/select an Xcode with an older SDK."
+            exit 1
+          fi
 
       # ldid is required: the CMake IPA step signs the binary with entitlements.
       - name: Install build tools

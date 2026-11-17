@@ -17,6 +17,7 @@
 	along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
 */
 #pragma once
+#import <UIKit/UIKit.h>
 #import <GameController/GameController.h>
 #import <CoreHaptics/CoreHaptics.h>
 
@@ -497,6 +498,11 @@ class IOSVirtualGamepad : public VirtualGamepad
 {
 public:
 	IOSVirtualGamepad() : VirtualGamepad("iOS") {
+#if !TARGET_OS_TV
+		// Haptic feedback on button presses (PadViewController), power set by config::VirtualGamepadVibration.
+		// iPads have no Taptic Engine.
+		rumbleEnabled = UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone;
+#endif
 	}
 
 	bool handleButtonInput(u32& state, u32 key, bool pressed) override

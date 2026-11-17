@@ -23,6 +23,7 @@
 #import "PadViewController.h"
 #include "ios_gamepad.h"
 #include "cfg/cfg.h"
+#include "cfg/option.h"
 #include "ui/vgamepad.h"
 #include "log/Log.h"
 
@@ -32,6 +33,9 @@
 	std::shared_ptr<IOSVirtualGamepad> virtualGamepad;
 	NSMutableDictionary *touchToButton;
 	NSTimer *hideTimer;
+#if !TARGET_OS_TV
+	UIImpactFeedbackGenerator *hapticGenerator;
+#endif
 }
 
 @end
@@ -44,6 +48,10 @@
 	virtualGamepad = std::make_shared<IOSVirtualGamepad>();
 	GamepadDevice::Register(virtualGamepad);
 	touchToButton = [[NSMutableDictionary alloc] init];
+#if !TARGET_OS_TV
+	hapticGenerator = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
+	[hapticGenerator prepare];
+#endif
 }
 
 - (void)dealloc
@@ -110,6 +118,20 @@
 	virtualGamepad->joystickInput(0, 0);
 }
 
+- (void)hapticFeedback:(vgamepad::ControlId)control
+{
+#if !TARGET_OS_TV
+	if (control == vgamepad::None || control == vgamepad::AnalogArea || control == vgamepad::AnalogStick
+			|| !virtualGamepad->is_rumble_enabled())
+		return;
+	int power = std::min<int>(config::VirtualGamepadVibration, 100);
+	if (power <= 0)
+		return;
+	[hapticGenerator impactOccurredWithIntensity:power / 100.0];
+	[hapticGenerator prepare];
+#endif
+}
+
 static CGPoint translateCoords(const CGPoint& pos, const CGSize& size)
 {
 	CGFloat hscale = 480.0 / size.height;
@@ -144,6 +166,7 @@ static CGPoint translateCoords(const CGPoint& pos, const CGSize& size)
 			touchToButton[key] = [NSNumber numberWithInt:control];
 			// button down
 			virtualGamepad->buttonInput(control, true);
+			[self hapticFeedback:control];
 			forwardEvent = false;
 		}
 	}
@@ -204,6 +227,7 @@ static CGPoint translateCoords(const CGPoint& pos, const CGSize& size)
 		}
 		// button down
 		virtualGamepad->buttonInput(control, true);
+		[self hapticFeedback:control];
 		touchToButton[key] = [NSNumber numberWithInt:control];
 		forwardEvent = false;
 	}

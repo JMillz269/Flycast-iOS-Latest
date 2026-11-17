@@ -1328,6 +1328,8 @@ if(NOT LIBRETRO)
 					shell/apple/common/util.mm
 					shell/apple/emulator-ios/emulator/AppDelegate.h
 					shell/apple/emulator-ios/emulator/AppDelegate.mm
+					shell/apple/emulator-ios/emulator/SceneDelegate.h
+					shell/apple/emulator-ios/emulator/SceneDelegate.mm
 					shell/apple/emulator-ios/emulator/ios_main.mm
 					shell/apple/emulator-ios/emulator/ios_gamepad.h
 					shell/apple/emulator-ios/emulator/ios_keyboard.h

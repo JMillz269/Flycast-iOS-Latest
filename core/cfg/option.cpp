@@ -196,7 +196,11 @@ Option<bool> OmxAudioHdmi("audio_hdmi", true, "omx");
 // Maple
 
 Option<int> MouseSensitivity("MouseSensitivity", 100, "input");
+#ifdef TARGET_IPHONE
+Option<int> VirtualGamepadVibration("VirtualGamepadVibration", 65, "input");
+#else
 Option<int> VirtualGamepadVibration("VirtualGamepadVibration", 20, "input");
+#endif
 Option<int> VirtualGamepadTransparency("VirtualGamepadTransparency", 37, "input");
 
 std::array<Option<MapleDeviceType>, 4> MapleMainDevices {

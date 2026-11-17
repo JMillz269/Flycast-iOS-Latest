@@ -786,6 +786,19 @@ bool checkTryDebug()
             [self.metalView removeFromSuperview];
 	}
 
+	// OpenGL renders into this view's drawable: keep the display size in sync with it. The size set in viewDidLoad
+	// (the main screen's native size) is wrong whenever the window doesn't cover the whole main screen, which
+	// misplaces the picture and the virtual gamepad relative to the touch areas.
+	// Vulkan gets its size from the swapchain instead.
+	if (!isVulkan(config::RendererType) && view.drawableWidth > 0 && view.drawableHeight > 0
+			&& (view.drawableWidth != settings.display.width || view.drawableHeight != settings.display.height))
+	{
+		INFO_LOG(RENDERER, "OpenGL drawable size %d x %d (was %d x %d)", (int)view.drawableWidth, (int)view.drawableHeight,
+				settings.display.width, settings.display.height);
+		settings.display.width = (int)view.drawableWidth;
+		settings.display.height = (int)view.drawableHeight;
+	}
+
 	if (mainui_rend_frame() && isVulkan(config::RendererType) && imguiDriver != nullptr)
 	{
 		try {
